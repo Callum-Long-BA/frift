@@ -729,3 +729,76 @@ fieldset {
   border: 1px solid #b9bfc5;
   border-radius: var(--radius-control);
 }
+
+/* ---------- Equalise + equipment ---------- */
+
+.equalise label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.equalise input {
+  accent-color: var(--plate);
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.equalise p {
+  margin-top: 2px;
+  padding-left: 26px;
+  font-size: 0.85rem;
+  color: var(--muted-on-ink);
+}
+
+.equipment {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  padding: 0;
+  border: 0;
+}
+
+.equipment legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-weight: 500;
+}
+
+.equipment label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.equipment input,
+.check-field input {
+  accent-color: var(--plate);
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.equipment .hint {
+  flex-basis: 100%;
+}
+
+.check-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.check-field input {
+  flex: none;
+  margin-top: 3px;
+}
+
+.check-field .hint {
+  display: block;
+  font-weight: 400;
+}

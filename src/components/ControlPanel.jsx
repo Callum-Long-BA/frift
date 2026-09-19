@@ -10,7 +10,16 @@ const MODE_OPTIONS = [
 ];
 
 // Grid cell A1: identity, chart mode, and the key for line colours.
-export default function ControlPanel({ people, me, onSelect, onAddPerson, mode, onModeChange }) {
+export default function ControlPanel({
+  people,
+  me,
+  onSelect,
+  onAddPerson,
+  mode,
+  onModeChange,
+  equalise,
+  onEqualiseChange,
+}) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -109,6 +118,14 @@ export default function ControlPanel({ people, me, onSelect, onAddPerson, mode, 
           </label>
         ))}
       </fieldset>
+
+      <div className="equalise">
+        <label>
+          <input type="checkbox" checked={equalise} onChange={(e) => onEqualiseChange(e.target.checked)} />
+          Equalise
+        </label>
+        <p>Doubles dumbbell weights, so they compare fairly with barbell lifts.</p>
+      </div>
 
       <ul className="legend" aria-label="Line colours">
         {people.length === 0 && <li className="legend-empty">No one yet. Add yourself with the menu above.</li>}

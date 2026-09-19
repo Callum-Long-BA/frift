@@ -215,3 +215,68 @@ test('pickTicks returns real dates, at most 4', () => {
   assert.equal(ticks[3], 29000);
   assert.equal(pickTicks([], 4), undefined);
 });
+
+// ---------- barbell / dumbbell and "equalise" ----------
+
+const db = (person_id, date, set_number, weight, reps) => ({
+  ...set(person_id, date, set_number, weight, reps), equipment: 'dumbbell',
+});
+const bb = (person_id, date, set_number, weight, reps) => ({
+  ...set(person_id, date, set_number, weight, reps), equipment: 'barbell',
+});
+
+
+test('equalise off: dumbbell weight is used as logged', () => {
+  const entries = [db(1, '2026-09-01', 1, 30, 10)];
+  assert.equal(dailySummaries(entries, bench, 'total').get(1).get('2026-09-01').value, 300);
+});
+
+test('equalise on: dumbbell sets count at double, barbell sets do not', () => {
+  const entries = [
+    db(1, '2026-09-01', 1, 30, 10), // 30 each -> 60 -> 600
+    bb(2, '2026-09-01', 1, 60, 10), // 600
+  ];
+  const s = dailySummaries(entries, bench, 'total', { equalise: true });
+  assert.equal(s.get(1).get('2026-09-01').value, 600);
+  assert.equal(s.get(2).get('2026-09-01').value, 600);
+});
+
+test('sets with no equipment recorded count as barbell, even with equalise on', () => {
+  const entries = [set(1, '2026-09-01', 1, 60, 10)];
+  assert.equal(dailySummaries(entries, bench, 'total', { equalise: true }).get(1).get('2026-09-01').value, 600);
+});
+
+test('equalise applies set by set when a day mixes barbell and dumbbell', () => {
+  const entries = [bb(1, '2026-09-01', 1, 60, 10), db(1, '2026-09-01', 2, 30, 10)];
+  assert.equal(dailySummaries(entries, bench, 'total', { equalise: true }).get(1).get('2026-09-01').value, 600 + 600);
+  assert.equal(dailySummaries(entries, bench, 'total').get(1).get('2026-09-01').value, 600 + 300);
+});
+
+test('equalise changes which set is best', () => {
+  const entries = [bb(1, '2026-09-01', 1, 50, 10), db(1, '2026-09-01', 2, 30, 10)]; // 500 vs 300 (or 600 doubled)
+  assert.equal(dailySummaries(entries, bench, 'best').get(1).get('2026-09-01').value, 500);
+  assert.equal(dailySummaries(entries, bench, 'best', { equalise: true }).get(1).get('2026-09-01').value, 600);
+});
+
+test('% change: switching from barbell to dumbbell is flat once equalised', () => {
+  const entries = [bb(1, '2026-09-01', 1, 60, 8), db(1, '2026-09-08', 1, 30, 8)];
+  const off = buildChartData(entries, bench, 'pct').rows;
+  const on = buildChartData(entries, bench, 'pct', { equalise: true }).rows;
+  assert.equal(off[1][seriesKey(1)], -50);
+  assert.equal(on[1][seriesKey(1)], 0);
+});
+
+test('tooltip detail keeps the logged weight and the equipment, plus the factor used', () => {
+  const entries = [db(1, '2026-09-01', 1, 30, 10)];
+  const [detail] = buildChartData(entries, bench, 'total', { equalise: true }).rows[0].detail[seriesKey(1)];
+  assert.equal(detail.weight, 30);
+  assert.equal(detail.equipment, 'dumbbell');
+  assert.equal(detail.factor, 2);
+  const [off] = buildChartData(entries, bench, 'total').rows[0].detail[seriesKey(1)];
+  assert.equal(off.factor, 1);
+});
+
+test('equalise never changes cardio', () => {
+  const { rows } = buildChartData([run(1, '2026-09-01', 30)], cardio, 'total', { equalise: true });
+  assert.equal(rows[0][seriesKey(1)], 30);
+});

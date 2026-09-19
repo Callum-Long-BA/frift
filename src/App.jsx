@@ -11,6 +11,7 @@ import PasscodeGate from './components/PasscodeGate.jsx';
 
 const ME_KEY = 'frift.me';
 const MODE_KEY = 'frift.mode';
+const EQUALISE_KEY = 'frift.equalise';
 
 export default function App() {
   const [unlocked, setUnlocked] = useState(() => Boolean(getPasscode()));
@@ -24,6 +25,7 @@ export default function App() {
     const stored = readStored(MODE_KEY);
     return MODES.includes(stored) ? stored : 'total';
   });
+  const [equalise, setEqualise] = useState(() => readStored(EQUALISE_KEY) === '1');
   const [dialogExerciseId, setDialogExerciseId] = useState(null);
   const [addingExercise, setAddingExercise] = useState(false);
 
@@ -61,7 +63,12 @@ export default function App() {
 
   // Pick up friends' new entries and exercises when you come back to the tab.
   useEffect(() => {
-    if (!unlocked) return undefined;
+    function changeEqualise(next) {
+    setEqualise(next);
+    writeStored(EQUALISE_KEY, next ? '1' : '0');
+  }
+
+  if (!unlocked) return undefined;
     const onVisible = () => {
       if (document.visibilityState === 'visible') load({ quiet: true });
     };
@@ -107,6 +114,8 @@ export default function App() {
         onAddPerson={addPerson}
         mode={mode}
         onModeChange={changeMode}
+        equalise={equalise}
+        onEqualiseChange={changeEqualise}
       />
 
       {status === 'loading' && exercises.length === 0 && (
@@ -123,6 +132,7 @@ export default function App() {
           entries={entries}
           me={me}
           mode={mode}
+          equalise={equalise}
           loading={status === 'loading'}
           onAdd={() => setDialogExerciseId(exercise.id)}
         />

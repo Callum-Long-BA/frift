@@ -74,9 +74,10 @@ test('parseName trims, collapses spaces, and enforces length', () => {
 });
 
 const exercises = [
-  { id: 'bench_press', kind: 'strength' },
-  { id: 'romanian_deadlift', kind: 'strength' },
-  { id: 'cardio', kind: 'cardio' },
+  { id: 'bench_press', kind: 'strength', equipment_choice: false },
+  { id: 'squat', kind: 'strength', equipment_choice: true },
+  { id: 'romanian_deadlift', kind: 'strength', equipment_choice: false },
+  { id: 'cardio', kind: 'cardio', equipment_choice: false },
 ];
 const base = { personId: 1, exercise: 'bench_press', date: '2026-09-19' };
 
@@ -132,4 +133,25 @@ test('slugify makes safe ids and refuses names with no letters or numbers', () =
 
 test('names that differ only by punctuation collide on the same slug', () => {
   assert.equal(slugify('Bench-press'), slugify('Bench press'));
+});
+
+const squat = { personId: 1, exercise: 'squat', date: '2026-09-19' };
+const oneSet = [{ weight: 30, reps: 10 }];
+
+test('exercises with a barbell/dumbbell choice require it, and keep it', () => {
+  assert.equal(parseNewEntry({ ...squat, equipment: 'dumbbell', sets: oneSet }, exercises, now).equipment, 'dumbbell');
+  assert.equal(parseNewEntry({ ...squat, equipment: 'barbell', sets: oneSet }, exercises, now).equipment, 'barbell');
+  assert.throws(() => parseNewEntry({ ...squat, sets: oneSet }, exercises, now), /Choose barbell or dumbbell/);
+  assert.throws(() => parseNewEntry({ ...squat, equipment: 'kettlebell', sets: oneSet }, exercises, now), HttpError);
+  assert.throws(() => parseNewEntry({ ...squat, equipment: '', sets: oneSet }, exercises, now), HttpError);
+});
+
+test('exercises without the choice ignore any equipment sent and store none', () => {
+  const e = parseNewEntry({ ...base, equipment: 'dumbbell', sets: oneSet }, exercises, now);
+  assert.equal(e.equipment, null);
+});
+
+test('cardio never carries equipment', () => {
+  const e = parseNewEntry({ personId: 1, exercise: 'cardio', date: '2026-09-19', durationMin: 20, equipment: 'dumbbell' }, exercises, now);
+  assert.equal(e.equipment, undefined);
 });

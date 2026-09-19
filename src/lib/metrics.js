@@ -34,6 +34,11 @@ export function nextSetNumber(entries, personId, exerciseId, date) {
   return highest + 1;
 }
 
+// A dumbbell set is entered as the weight of ONE dumbbell. With "equalise" on it is
+// counted at double, so it can be compared with a barbell. Sets with no equipment
+// recorded (older entries, or exercises with no choice) count as barbell.
+const factorFor = (row, equalise) => (equalise && row.equipment === 'dumbbell' ? 2 : 1);
+
 // Map<personId, Map<'YYYY-MM-DD', { value, sets }>>
 //
 // mode 'total' (default):
@@ -44,7 +49,8 @@ export function nextSetNumber(entries, personId, exerciseId, date) {
 //
 // `sets` lists every set that day, with `counts: true` on the sets that
 // contributed to `value` in this mode (used to fade the others in the tooltip).
-export function dailySummaries(entries, exercise, mode = 'total') {
+// `weight` is always the weight as logged; `factor` is 2 for equalised dumbbell sets.
+export function dailySummaries(entries, exercise, mode = 'total', { equalise = false } = {}) {
   const groups = new Map();
   for (const e of entries) {
     if (e.exercise !== exercise.id) continue;
@@ -63,15 +69,23 @@ export function dailySummaries(entries, exercise, mode = 'total') {
       value = rows.reduce((sum, r) => sum + (r.duration_min ?? 0), 0);
     } else {
       rows.sort((a, b) => a.set_number - b.set_number);
-      sets = rows.map((r) => ({ setNumber: r.set_number, weight: r.weight, reps: r.reps, counts: false }));
+      sets = rows.map((r) => ({
+        setNumber: r.set_number,
+        weight: r.weight,
+        reps: r.reps,
+        equipment: r.equipment ?? null,
+        factor: factorFor(r, equalise),
+        counts: false,
+      }));
+      const volume = (s) => s.weight * s.factor * s.reps;
 
       if (mode === 'best') {
         let bestIndex = 0;
         let bestValue = -Infinity;
         sets.forEach((s, i) => {
-          const volume = s.weight * s.reps;
-          if (volume > bestValue) {
-            bestValue = volume;
+          const v = volume(s);
+          if (v > bestValue) {
+            bestValue = v;
             bestIndex = i;
           }
         });
@@ -82,7 +96,7 @@ export function dailySummaries(entries, exercise, mode = 'total') {
         counted.forEach((s) => {
           s.counts = true;
         });
-        value = counted.reduce((sum, s) => sum + s.weight * s.reps, 0);
+        value = counted.reduce((sum, s) => sum + volume(s), 0);
       }
     }
 
@@ -95,10 +109,11 @@ export function dailySummaries(entries, exercise, mode = 'total') {
 
 // mode: 'total' | 'pct' | 'best'.
 //   pct = % change in the total from that person's first logged day.
+// options.equalise: count dumbbell sets at double weight (see factorFor).
 // Returns rows shaped for a Recharts LineChart:
 //   { t, date, p<id>: value | null, detail: { p<id>: sets } }
-export function buildChartData(entries, exercise, mode) {
-  const summaries = dailySummaries(entries, exercise, mode === 'best' ? 'best' : 'total');
+export function buildChartData(entries, exercise, mode, { equalise = false } = {}) {
+  const summaries = dailySummaries(entries, exercise, mode === 'best' ? 'best' : 'total', { equalise });
   const perPerson = new Map();
   const allDates = new Set();
 

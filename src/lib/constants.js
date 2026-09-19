@@ -10,6 +10,10 @@ export const MAX_EXERCISES = 20;
 export const MAX_EXERCISE_NAME = 30;
 export const MAX_SETS_PER_ENTRY = 10;
 
+// How a set was lifted, for exercises that allow a choice. Dumbbell weights are
+// entered per dumbbell, so the "Equalise" option doubles them to compare with a barbell.
+export const EQUIPMENT = ['barbell', 'dumbbell'];
+
 // What the charts can show: total weight, % change, or best single set.
 export const MODES = ['total', 'pct', 'best'];
 
