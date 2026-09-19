@@ -13,13 +13,15 @@ Shared lifting progress for a small group. One line chart per exercise, one colo
 - **Total weight:** for each person, exercise and day, only the **last 3 sets** count. The value is the sum of weight x reps across those sets, so doing 5 sets does not beat doing 3.
 - **% change:** the total weight above, measured as % change from each person's own first logged day for that exercise, so every line starts at 0%.
 - **Best set:** the single set with the highest weight x reps that day. This looks at **all** sets of the day, not just the last 3, so a strong early set still counts.
+- **Barbell or dumbbell:** Bench press, Squat and Shoulder press ask whether each batch of sets was barbell or dumbbell. For dumbbells, enter the weight of **one** dumbbell.
+- **Equalise** (checkbox in the top-left cell): counts dumbbell sets at double weight, in every mode, so dumbbell and barbell lifting can be compared on the same chart. It is off by default, and your tick is remembered in your browser. Sets with no equipment recorded, such as older entries, count as barbell.
 - **Cardio** is minutes, one entry per person per day, and looks the same in every mode.
 - Hover a data point on any weight x reps chart to see every set each person did that day. Bold sets are the ones counting toward the chart in the current mode; faded sets are not.
 - Choosing your name in the top-left cell thickens your line, dims everyone else's, and switches on the + buttons. That choice is remembered in your browser only.
 
 ## Exercises
 
-- Anyone can add an exercise with the **Add exercise** tile at the end of the grid. New exercises are always weight x reps.
+- Anyone can add an exercise with the **Add exercise** tile at the end of the grid. New exercises are always weight x reps. Tick "Can be done with a barbell or dumbbells" to give it the barbell/dumbbell choice.
 - New charts appear for everyone, in the order they were added. The limit is 20 exercises (`MAX_EXERCISES` in `src/lib/constants.js`).
 - There is no delete in the app, on purpose, so nobody loses history to a mis-tap. To remove or rename one, use the Neon SQL editor (see below).
 
@@ -81,6 +83,8 @@ npm run dev          # runs vercel dev: front end and /api together
 - **Fix a mistake in a log:** open the + dialog for that exercise, pick the date, and use Delete next to the entry. You can only delete your own.
 - **Rename an exercise:** in Neon, `update exercises set name = 'Romanian deadlift' where id = 'romanian_deadlift';`
 - **Remove an exercise and all its entries:** in Neon, `delete from entries where exercise = 'romanian_deadlift'; delete from exercises where id = 'romanian_deadlift';`
+- **Turn the barbell/dumbbell choice on or off for an exercise:** in Neon, `update exercises set equipment_choice = true where id = 'lat_pulldown';` (use `false` to turn it off; past entries keep what was recorded).
+- **Correct an old entry to dumbbell:** in Neon, `update entries set equipment = 'dumbbell' where exercise = 'shoulder_press' and person_id = 1 and entry_date = '2026-09-10';`
 - **Rename someone:** in Neon, `update people set name = 'Sam' where id = 2;`
 
 ## Limits worth knowing

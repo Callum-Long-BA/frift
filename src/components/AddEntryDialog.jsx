@@ -11,6 +11,16 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const isCardio = exercise.kind === 'cardio';
+  const hasEquipment = exercise.equipment_choice === true && !isCardio;
+
+  // Start on whatever this person used last time for this exercise, else barbell.
+  const [equipment, setEquipment] = useState(() => {
+    const previous = entries
+      .filter((e) => e.person_id === person.id && e.exercise === exercise.id && e.equipment)
+      .sort((a, b) => b.id - a.id)[0];
+    return previous?.equipment ?? 'barbell';
+  });
+  const isDumbbell = hasEquipment && equipment === 'dumbbell';
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -71,6 +81,7 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
         parsed.push({ weight: Number(weight), reps: Number(reps) });
       }
       payload = { personId: person.id, exercise: exercise.id, date, sets: parsed };
+      if (hasEquipment) payload.equipment = equipment;
     }
 
     setBusy(true);
@@ -134,6 +145,33 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
           />
         </label>
 
+        {hasEquipment && (
+          <fieldset className="equipment" disabled={busy}>
+            <legend>Equipment</legend>
+            <label>
+              <input
+                type="radio"
+                name="equipment"
+                value="barbell"
+                checked={equipment === 'barbell'}
+                onChange={() => setEquipment('barbell')}
+              />
+              Barbell
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="equipment"
+                value="dumbbell"
+                checked={equipment === 'dumbbell'}
+                onChange={() => setEquipment('dumbbell')}
+              />
+              Dumbbell
+            </label>
+            {isDumbbell && <p className="hint">Enter the weight of one dumbbell.</p>}
+          </fieldset>
+        )}
+
         {isCardio ? (
           <div className="field">
             <label htmlFor="minutes">Duration in minutes</label>
@@ -165,8 +203,8 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
                     min="0"
                     max="1000"
                     step="0.5"
-                    placeholder="kg"
-                    aria-label={`Set ${n} weight in kilograms`}
+                    placeholder={isDumbbell ? 'kg each' : 'kg'}
+                    aria-label={`Set ${n} weight in kilograms${isDumbbell ? ', per dumbbell' : ''}`}
                     value={s.weight}
                     onChange={(e) => updateSet(i, { weight: e.target.value })}
                   />
@@ -209,7 +247,7 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
             <ul className="logged">
               {logged.map((row) => (
                 <li key={row.id}>
-                  <span>{isCardio ? `${row.duration_min} min` : `Set ${row.set_number}: ${row.weight} kg × ${row.reps}`}</span>
+                  <span>{isCardio ? `${row.duration_min} min` : `Set ${row.set_number}: ${row.weight} kg × ${row.reps}${row.equipment ? `, ${row.equipment}` : ''}`}</span>
                   {!isCardio && countedIds.has(row.id) && <span className="tag">counts</span>}
                   <button type="button" className="text-btn danger" onClick={() => remove(row)}>
                     Delete

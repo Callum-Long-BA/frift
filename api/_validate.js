@@ -1,4 +1,4 @@
-import { MAX_EXERCISE_NAME, MAX_SETS_PER_ENTRY } from '../src/lib/constants.js';
+import { EQUIPMENT, MAX_EXERCISE_NAME, MAX_SETS_PER_ENTRY } from '../src/lib/constants.js';
 import { HttpError } from './_http.js';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -58,9 +58,9 @@ export function parseDate(value, now = new Date()) {
   return value;
 }
 
-// `exercises` is the list from the database: [{ id, kind }].
+// `exercises` is the list from the database: [{ id, kind, equipment_choice }].
 // Returns a normalised entry:
-//   { kind: 'strength', personId, exercise, date, sets: [{ weight, reps }] }
+//   { kind: 'strength', personId, exercise, date, equipment, sets: [{ weight, reps }] }
 //   { kind: 'cardio',   personId, exercise, date, durationMin }
 export function parseNewEntry(body, exercises, now = new Date()) {
   const personId = parseId(body?.personId, 'Person');
@@ -91,5 +91,13 @@ export function parseNewEntry(body, exercises, now = new Date()) {
     }
     return { weight, reps };
   });
-  return { kind: 'strength', personId, exercise: exercise.id, date, sets };
+
+  // Exercises that allow a choice need to say barbell or dumbbell. Others store nothing.
+  let equipment = null;
+  if (exercise.equipment_choice) {
+    if (!EQUIPMENT.includes(body?.equipment)) throw new HttpError(400, 'Choose barbell or dumbbell.');
+    equipment = body.equipment;
+  }
+
+  return { kind: 'strength', personId, exercise: exercise.id, date, equipment, sets };
 }

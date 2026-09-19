@@ -8,12 +8,13 @@ export default route({
   async GET() {
     const sql = db();
     return await sql`
-      select id, name, kind, created_by, sort_order
+      select id, name, kind, equipment_choice, created_by, sort_order
       from exercises
       order by sort_order, id`;
   },
 
-  // { name, personId }. New exercises are always weight x reps.
+  // { name, personId, equipmentChoice? }. New exercises are always weight x reps.
+  // equipmentChoice = true lets people log each set as barbell or dumbbell.
   async POST(req) {
     const name = parseExerciseName(req.body?.name);
     const id = slugify(name);
@@ -21,15 +22,16 @@ export default route({
       req.body?.personId === undefined || req.body?.personId === null
         ? null
         : parseId(req.body.personId, 'Person');
+    const equipmentChoice = req.body?.equipmentChoice === true;
     const sql = db();
 
     try {
       // The cap is checked inside the insert, so two people adding at once cannot both squeeze past it.
       const rows = await sql`
-        insert into exercises (id, name, kind, created_by)
-        select ${id}::text, ${name}::text, 'strength'::text, ${createdBy}::int
+        insert into exercises (id, name, kind, equipment_choice, created_by)
+        select ${id}::text, ${name}::text, 'strength'::text, ${equipmentChoice}::boolean, ${createdBy}::int
         where (select count(*) from exercises) < ${MAX_EXERCISES}::int
-        returning id, name, kind, created_by, sort_order`;
+        returning id, name, kind, equipment_choice, created_by, sort_order`;
       if (rows.length === 0) throw new HttpError(409, `FRIFT is capped at ${MAX_EXERCISES} exercises.`);
       return rows[0];
     } catch (err) {

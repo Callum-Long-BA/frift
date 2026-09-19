@@ -25,17 +25,19 @@ export default route({
              set_number,
              weight::float8 as weight,
              reps,
-             duration_min::float8 as duration_min
+             duration_min::float8 as duration_min,
+             equipment
       from entries
       order by entry_date, set_number, id`;
   },
 
-  // Strength: { personId, exercise, date, sets: [{ weight, reps }] }
+  // Strength: { personId, exercise, date, equipment?, sets: [{ weight, reps }] }
   //   Set numbers continue from whatever that person already logged that day.
+  //   equipment ('barbell' | 'dumbbell') is required for exercises that offer the choice.
   // Cardio:   { personId, exercise: 'cardio', date, durationMin }
   async POST(req) {
     const sql = db();
-    const exercises = await sql`select id, kind from exercises`;
+    const exercises = await sql`select id, kind, equipment_choice from exercises`;
     const entry = parseNewEntry(req.body, exercises);
     try {
       if (entry.kind === 'cardio') {
@@ -44,7 +46,7 @@ export default route({
           values (${entry.personId}::int, ${entry.exercise}::text, ${entry.date}::date, 1, ${entry.durationMin}::numeric)
           returning id, person_id, exercise,
                     to_char(entry_date, 'YYYY-MM-DD') as date,
-                    set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min`;
+                    set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment`;
       }
 
       const numbers = entry.sets.map((_, i) => i + 1);
@@ -53,7 +55,7 @@ export default route({
 
       // One statement, so either every set is saved or none are.
       return await sql`
-        insert into entries (person_id, exercise, entry_date, set_number, weight, reps)
+        insert into entries (person_id, exercise, entry_date, set_number, weight, reps, equipment)
         select ${entry.personId}::int,
                ${entry.exercise}::text,
                ${entry.date}::date,
@@ -62,11 +64,12 @@ export default route({
                    and exercise = ${entry.exercise}::text
                    and entry_date = ${entry.date}::date) + s.n,
                s.w,
-               s.r
+               s.r,
+               ${entry.equipment}::text
         from unnest(${numbers}::int[], ${weights}::numeric[], ${reps}::int[]) as s(n, w, r)
         returning id, person_id, exercise,
                   to_char(entry_date, 'YYYY-MM-DD') as date,
-                  set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min`;
+                  set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment`;
     } catch (err) {
       throw translateDbError(err, entry);
     }

@@ -22,13 +22,14 @@ import {
 
 // Hover card: everyone's value for that day, plus every set they did.
 // Sets that count toward the chart in the current mode are bold; the rest are faded.
-export function ChartTooltip({ active, payload, label, mode, kind }) {
+export function ChartTooltip({ active, payload, label, mode, kind, equalise = false }) {
   if (!active || !payload?.length) return null;
   const items = payload.filter((p) => p.value !== null && p.value !== undefined).sort((a, b) => b.value - a.value);
   if (items.length === 0) return null;
 
   const setsFor = (item) => item.payload?.detail?.[item.dataKey] ?? [];
   const anyFaded = items.some((item) => setsFor(item).some((s) => !s.counts));
+  const anyDumbbell = items.some((item) => setsFor(item).some((s) => s.equipment === 'dumbbell'));
 
   return (
     <div className="tip">
@@ -50,6 +51,7 @@ export function ChartTooltip({ active, payload, label, mode, kind }) {
                     <span key={s.setNumber} className={s.counts ? 'tip-set is-counted' : 'tip-set'}>
                       {i > 0 && ', '}
                       {s.weight}×{s.reps}
+                      {s.equipment === 'dumbbell' && ' DB'}
                     </span>
                   ))}
                 </p>
@@ -58,6 +60,13 @@ export function ChartTooltip({ active, payload, label, mode, kind }) {
           );
         })}
       </ul>
+      {anyDumbbell && (
+        <p className="tip-note">
+          {equalise
+            ? 'DB is dumbbell. Its weight is one dumbbell, counted at double here.'
+            : 'DB is dumbbell. Its weight is one dumbbell.'}
+        </p>
+      )}
       {anyFaded && (
         <p className="tip-note">
           {mode === 'best'
@@ -69,15 +78,20 @@ export function ChartTooltip({ active, payload, label, mode, kind }) {
   );
 }
 
-function subtitleFor(exercise, mode) {
+function subtitleFor(exercise, mode, equalise) {
   if (exercise.kind === 'cardio') return mode === 'pct' ? 'Minutes, change since first log' : 'Minutes per day';
-  if (mode === 'pct') return 'Total weight, change since first log';
-  if (mode === 'best') return 'Best set of the day, weight × reps, kg';
-  return `Last ${COUNTED_SETS} sets, weight × reps, kg`;
+  let text;
+  if (mode === 'pct') text = 'Total weight, change since first log';
+  else if (mode === 'best') text = 'Best set of the day, weight × reps, kg';
+  else text = `Last ${COUNTED_SETS} sets, weight × reps, kg`;
+  return equalise && exercise.equipment_choice ? `${text}. Dumbbells doubled.` : text;
 }
 
-export default function ExerciseChart({ exercise, people, entries, me, mode, loading, onAdd }) {
-  const { rows, personIds } = useMemo(() => buildChartData(entries, exercise, mode), [entries, exercise, mode]);
+export default function ExerciseChart({ exercise, people, entries, me, mode, equalise = false, loading, onAdd }) {
+  const { rows, personIds } = useMemo(
+    () => buildChartData(entries, exercise, mode, { equalise }),
+    [entries, exercise, mode, equalise],
+  );
 
   // Draw the selected person last so their line sits on top of everyone else's.
   const drawn = useMemo(() => {
@@ -90,7 +104,7 @@ export default function ExerciseChart({ exercise, people, entries, me, mode, loa
 
   const ticks = useMemo(() => pickTicks(rows), [rows]);
 
-  const subtitle = subtitleFor(exercise, mode);
+  const subtitle = subtitleFor(exercise, mode, equalise);
 
   const emptyText = loading
     ? 'Loading…'
@@ -141,7 +155,7 @@ export default function ExerciseChart({ exercise, people, entries, me, mode, loa
               />
               {mode === 'pct' && <ReferenceLine y={0} stroke="#9AA1A9" strokeDasharray="4 4" />}
               <Tooltip
-                content={<ChartTooltip mode={mode} kind={exercise.kind} />}
+                content={<ChartTooltip mode={mode} kind={exercise.kind} equalise={equalise} />}
                 cursor={{ stroke: '#9AA1A9' }}
                 allowEscapeViewBox={{ x: false, y: true }}
                 wrapperStyle={{ zIndex: 20, outline: 'none' }}

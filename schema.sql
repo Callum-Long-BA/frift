@@ -16,6 +16,7 @@ create table if not exists exercises (
   id         text primary key,                      -- slug, e.g. 'bench_press'
   name       text not null,
   kind       text not null default 'strength' check (kind in ('strength', 'cardio')),
+  equipment_choice boolean not null default false,  -- true = log each set as barbell or dumbbell
   created_by int references people(id) on delete set null,
   sort_order serial,                                -- charts appear in this order
   created_at timestamptz not null default now()
@@ -23,16 +24,22 @@ create table if not exists exercises (
 
 create unique index if not exists exercises_name_unique on exercises (lower(name));
 
+-- Databases created before barbell/dumbbell support need the column added.
+alter table exercises add column if not exists equipment_choice boolean not null default false;
+
 -- The original seven. Do not add sort_order here: the sequence numbers them in order.
-insert into exercises (id, name, kind) values
-  ('bench_press',     'Bench press',           'strength'),
-  ('lat_pulldown',    'Lat pull down',         'strength'),
-  ('squat',           'Squat',                 'strength'),
-  ('leg_extension',   'Leg extension',         'strength'),
-  ('shoulder_press',  'Shoulder press',        'strength'),
-  ('incline_db_curl', 'Incline dumbbell curl', 'strength'),
-  ('cardio',          'Cardio',                'cardio')
+insert into exercises (id, name, kind, equipment_choice) values
+  ('bench_press',     'Bench press',           'strength', true),
+  ('lat_pulldown',    'Lat pull down',         'strength', false),
+  ('squat',           'Squat',                 'strength', true),
+  ('leg_extension',   'Leg extension',         'strength', false),
+  ('shoulder_press',  'Shoulder press',        'strength', true),
+  ('incline_db_curl', 'Incline dumbbell curl', 'strength', false),
+  ('cardio',          'Cardio',                'cardio',   false)
 on conflict do nothing;
+
+-- Existing databases already have these rows, so switch the option on for them too.
+update exercises set equipment_choice = true where id in ('bench_press', 'squat', 'shoulder_press');
 
 -- One row per set. Cardio is one row per day with only duration_min filled in.
 create table if not exists entries (
@@ -44,6 +51,7 @@ create table if not exists entries (
   weight       numeric(6,2),
   reps         int,
   duration_min numeric(6,1),
+  equipment    text check (equipment in ('barbell', 'dumbbell')),  -- null = not recorded (counted as barbell)
   created_at   timestamptz not null default now(),
 
   constraint entries_shape check (
@@ -55,6 +63,9 @@ create table if not exists entries (
     coalesce(weight, 0) >= 0 and coalesce(reps, 1) >= 1 and coalesce(duration_min, 1) > 0
   )
 );
+
+-- Databases created before barbell/dumbbell support need the column added.
+alter table entries add column if not exists equipment text check (equipment in ('barbell', 'dumbbell'));
 
 -- Every entry must belong to a real exercise.
 do $$

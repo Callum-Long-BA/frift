@@ -5,6 +5,7 @@ import { MAX_EXERCISES, MAX_EXERCISE_NAME } from '../lib/constants.js';
 export default function AddExerciseDialog({ person, exercises, onClose, onCreated }) {
   const dialogRef = useRef(null);
   const [name, setName] = useState('');
+  const [equipmentChoice, setEquipmentChoice] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -29,7 +30,7 @@ export default function AddExerciseDialog({ person, exercises, onClose, onCreate
     setBusy(true);
     setError('');
     try {
-      const created = await api.addExercise(clean, person.id);
+      const created = await api.addExercise(clean, person.id, equipmentChoice);
       onCreated(created);
       closeDialog();
     } catch (err) {
@@ -79,6 +80,19 @@ export default function AddExerciseDialog({ person, exercises, onClose, onCreate
             once added, so check the spelling. {exercises.length} of {MAX_EXERCISES} used.
           </p>
         </div>
+
+        <label className="check-field">
+          <input
+            type="checkbox"
+            checked={equipmentChoice}
+            disabled={busy}
+            onChange={(e) => setEquipmentChoice(e.target.checked)}
+          />
+          <span>
+            Can be done with a barbell or dumbbells
+            <span className="hint"> Each set is logged as one or the other, and Equalise can double dumbbell weights.</span>
+          </span>
+        </label>
 
         {error && (
           <p className="error" role="alert">
