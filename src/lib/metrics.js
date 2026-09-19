@@ -34,10 +34,17 @@ export function nextSetNumber(entries, personId, exerciseId, date) {
   return highest + 1;
 }
 
-// Map<personId, Map<'YYYY-MM-DD', number>>
-// Strength: sum of weight x reps over the LAST 3 sets (by set number) of the day.
-// Cardio: minutes.
-export function dailyTotals(entries, exercise) {
+// Map<personId, Map<'YYYY-MM-DD', { value, sets }>>
+//
+// mode 'total' (default):
+//   value = sum of weight x reps over the LAST 3 sets (by set number) of the day.
+// mode 'best':
+//   value = the single set with the highest weight x reps that day, from ALL sets.
+// Cardio is minutes in either mode and has no sets.
+//
+// `sets` lists every set that day, with `counts: true` on the sets that
+// contributed to `value` in this mode (used to fade the others in the tooltip).
+export function dailySummaries(entries, exercise, mode = 'total') {
   const groups = new Map();
   for (const e of entries) {
     if (e.exercise !== exercise.id) continue;
@@ -46,50 +53,77 @@ export function dailyTotals(entries, exercise) {
     groups.get(key).push(e);
   }
 
-  const totals = new Map();
+  const summaries = new Map();
   for (const [key, rows] of groups) {
     const [personId, date] = key.split('|');
     let value;
+    let sets = [];
+
     if (exercise.kind === 'cardio') {
       value = rows.reduce((sum, r) => sum + (r.duration_min ?? 0), 0);
     } else {
       rows.sort((a, b) => a.set_number - b.set_number);
-      value = rows.slice(-COUNTED_SETS).reduce((sum, r) => sum + r.weight * r.reps, 0);
+      sets = rows.map((r) => ({ setNumber: r.set_number, weight: r.weight, reps: r.reps, counts: false }));
+
+      if (mode === 'best') {
+        let bestIndex = 0;
+        let bestValue = -Infinity;
+        sets.forEach((s, i) => {
+          const volume = s.weight * s.reps;
+          if (volume > bestValue) {
+            bestValue = volume;
+            bestIndex = i;
+          }
+        });
+        sets[bestIndex].counts = true;
+        value = bestValue;
+      } else {
+        const counted = sets.slice(-COUNTED_SETS);
+        counted.forEach((s) => {
+          s.counts = true;
+        });
+        value = counted.reduce((sum, s) => sum + s.weight * s.reps, 0);
+      }
     }
+
     const id = Number(personId);
-    if (!totals.has(id)) totals.set(id, new Map());
-    totals.get(id).set(date, value);
+    if (!summaries.has(id)) summaries.set(id, new Map());
+    summaries.get(id).set(date, { value, sets });
   }
-  return totals;
+  return summaries;
 }
 
-// mode: 'total' (raw value) or 'pct' (% change from that person's first logged day).
-// Returns rows shaped for a Recharts LineChart: { t, date, p<id>: value | null }.
+// mode: 'total' | 'pct' | 'best'.
+//   pct = % change in the total from that person's first logged day.
+// Returns rows shaped for a Recharts LineChart:
+//   { t, date, p<id>: value | null, detail: { p<id>: sets } }
 export function buildChartData(entries, exercise, mode) {
-  const totals = dailyTotals(entries, exercise);
+  const summaries = dailySummaries(entries, exercise, mode === 'best' ? 'best' : 'total');
   const perPerson = new Map();
   const allDates = new Set();
 
-  for (const [personId, byDate] of totals) {
+  for (const [personId, byDate] of summaries) {
     const points = [...byDate]
-      .map(([date, value]) => ({ date, value }))
+      .map(([date, summary]) => ({ date, ...summary }))
       .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
     let series = points;
     if (mode === 'pct') {
       const base = points[0].value;
       if (!(base > 0)) continue; // change from zero is undefined
-      series = points.map((p) => ({ date: p.date, value: round1((p.value / base - 1) * 100) }));
+      series = points.map((p) => ({ ...p, value: round1((p.value / base - 1) * 100) }));
     }
 
-    perPerson.set(personId, new Map(series.map((p) => [p.date, p.value])));
+    perPerson.set(personId, new Map(series.map((p) => [p.date, p])));
     for (const p of series) allDates.add(p.date);
   }
 
   const rows = [...allDates].sort().map((date) => {
-    const row = { t: toTimestamp(date), date };
+    const row = { t: toTimestamp(date), date, detail: {} };
     for (const [personId, byDate] of perPerson) {
-      row[seriesKey(personId)] = byDate.has(date) ? byDate.get(date) : null;
+      const point = byDate.get(date);
+      row[seriesKey(personId)] = point ? point.value : null;
+      if (point && point.sets.length > 0) row.detail[seriesKey(personId)] = point.sets;
     }
     return row;
   });

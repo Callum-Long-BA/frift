@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { route, HttpError } from '../api/_http.js';
-import { parseDate, parseName, parseNewEntry } from '../api/_validate.js';
+import { parseDate, parseExerciseName, parseName, parseNewEntry, slugify } from '../api/_validate.js';
 
 process.env.FRIFT_PASSCODE = 'secret-lift';
 
@@ -73,10 +73,15 @@ test('parseName trims, collapses spaces, and enforces length', () => {
   assert.throws(() => parseName('x'.repeat(25)), HttpError);
 });
 
+const exercises = [
+  { id: 'bench_press', kind: 'strength' },
+  { id: 'romanian_deadlift', kind: 'strength' },
+  { id: 'cardio', kind: 'cardio' },
+];
 const base = { personId: 1, exercise: 'bench_press', date: '2026-09-19' };
 
 test('parseNewEntry accepts valid strength sets', () => {
-  const e = parseNewEntry({ ...base, sets: [{ weight: '60', reps: 8 }, { weight: 62.5, reps: '6' }] }, now);
+  const e = parseNewEntry({ ...base, sets: [{ weight: '60', reps: 8 }, { weight: 62.5, reps: '6' }] }, exercises, now);
   assert.equal(e.kind, 'strength');
   assert.deepEqual(e.sets, [{ weight: 60, reps: 8 }, { weight: 62.5, reps: 6 }]);
 });
@@ -92,13 +97,39 @@ test('parseNewEntry rejects blanks, fractions, negatives and bad shapes', () => 
     { ...base, exercise: 'deadlift', sets: [{ weight: 60, reps: 8 }] },
     { ...base, personId: 'abc', sets: [{ weight: 60, reps: 8 }] },
   ];
-  for (const body of bad) assert.throws(() => parseNewEntry(body, now), HttpError);
+  for (const body of bad) assert.throws(() => parseNewEntry(body, exercises, now), HttpError);
 });
 
 test('parseNewEntry handles cardio minutes', () => {
-  const e = parseNewEntry({ personId: 2, exercise: 'cardio', date: '2026-09-19', durationMin: '30' }, now);
+  const e = parseNewEntry({ personId: 2, exercise: 'cardio', date: '2026-09-19', durationMin: '30' }, exercises, now);
   assert.deepEqual(e, { kind: 'cardio', personId: 2, exercise: 'cardio', date: '2026-09-19', durationMin: 30 });
   for (const durationMin of ['', 0, -3, 601, 'abc']) {
-    assert.throws(() => parseNewEntry({ personId: 2, exercise: 'cardio', date: '2026-09-19', durationMin }, now), HttpError);
+    assert.throws(() => parseNewEntry({ personId: 2, exercise: 'cardio', date: '2026-09-19', durationMin }, exercises, now), HttpError);
   }
+});
+
+test('parseNewEntry accepts a user-added exercise once it is in the database list', () => {
+  const body = { personId: 1, exercise: 'romanian_deadlift', date: '2026-09-19', sets: [{ weight: 80, reps: 8 }] };
+  assert.equal(parseNewEntry(body, exercises, now).exercise, 'romanian_deadlift');
+  assert.throws(() => parseNewEntry(body, exercises.slice(0, 1), now), HttpError);
+});
+
+test('parseExerciseName trims, collapses spaces, and enforces length', () => {
+  assert.equal(parseExerciseName('  Romanian   deadlift '), 'Romanian deadlift');
+  assert.throws(() => parseExerciseName('   '), HttpError);
+  assert.throws(() => parseExerciseName('x'.repeat(31)), HttpError);
+  assert.equal(parseExerciseName('x'.repeat(30)).length, 30);
+});
+
+test('slugify makes safe ids and refuses names with no letters or numbers', () => {
+  assert.equal(slugify('Incline Bench Press!'), 'incline_bench_press');
+  assert.equal(slugify('  Face   pulls '), 'face_pulls');
+  assert.equal(slugify('Écarté'), 'ecarte');
+  assert.equal(slugify("Farmer's walk (heavy)"), 'farmer_s_walk_heavy');
+  assert.throws(() => slugify('🏋️'), HttpError);
+  assert.throws(() => slugify('---'), HttpError);
+});
+
+test('names that differ only by punctuation collide on the same slug', () => {
+  assert.equal(slugify('Bench-press'), slugify('Bench press'));
 });

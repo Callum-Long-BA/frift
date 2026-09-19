@@ -3,6 +3,12 @@ import { MAX_PEOPLE } from '../lib/constants.js';
 
 const NEW_PERSON = 'new';
 
+const MODE_OPTIONS = [
+  ['total', 'Total weight'],
+  ['pct', '% change'],
+  ['best', 'Best set'],
+];
+
 // Grid cell A1: identity, chart mode, and the key for line colours.
 export default function ControlPanel({ people, me, onSelect, onAddPerson, mode, onModeChange }) {
   const [adding, setAdding] = useState(false);
@@ -96,14 +102,12 @@ export default function ControlPanel({ people, me, onSelect, onAddPerson, mode, 
 
       <fieldset className="mode">
         <legend>Charts show</legend>
-        <label>
-          <input type="radio" name="mode" value="total" checked={mode === 'total'} onChange={() => onModeChange('total')} />
-          Total weight
-        </label>
-        <label>
-          <input type="radio" name="mode" value="pct" checked={mode === 'pct'} onChange={() => onModeChange('pct')} />
-          % change
-        </label>
+        {MODE_OPTIONS.map(([value, label]) => (
+          <label key={value}>
+            <input type="radio" name="mode" value={value} checked={mode === value} onChange={() => onModeChange(value)} />
+            {label}
+          </label>
+        ))}
       </fieldset>
 
       <ul className="legend" aria-label="Line colours">

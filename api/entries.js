@@ -34,8 +34,9 @@ export default route({
   //   Set numbers continue from whatever that person already logged that day.
   // Cardio:   { personId, exercise: 'cardio', date, durationMin }
   async POST(req) {
-    const entry = parseNewEntry(req.body);
     const sql = db();
+    const exercises = await sql`select id, kind from exercises`;
+    const entry = parseNewEntry(req.body, exercises);
     try {
       if (entry.kind === 'cardio') {
         return await sql`

@@ -1,21 +1,17 @@
 // Shared by the browser and the API functions.
-// To add an exercise, add one line here. No database change is needed.
-export const EXERCISES = [
-  { id: 'bench_press', name: 'Bench press', kind: 'strength' },
-  { id: 'lat_pulldown', name: 'Lat pull down', kind: 'strength' },
-  { id: 'squat', name: 'Squat', kind: 'strength' },
-  { id: 'leg_extension', name: 'Leg extension', kind: 'strength' },
-  { id: 'shoulder_press', name: 'Shoulder press', kind: 'strength' },
-  { id: 'incline_db_curl', name: 'Incline dumbbell curl', kind: 'strength' },
-  { id: 'cardio', name: 'Cardio', kind: 'cardio' },
-];
+// The exercise list itself now lives in the database (table: exercises).
 
-// Only the last N sets of a day count toward the chart, so someone doing
+// Only the last N sets of a day count toward the total, so someone doing
 // 5 sets does not look stronger than someone doing 3.
 export const COUNTED_SETS = 3;
 
 export const MAX_PEOPLE = 10;
+export const MAX_EXERCISES = 20;
+export const MAX_EXERCISE_NAME = 30;
 export const MAX_SETS_PER_ENTRY = 10;
+
+// What the charts can show: total weight, % change, or best single set.
+export const MODES = ['total', 'pct', 'best'];
 
 // Handed out in order as people join. Chosen to stay distinguishable on white.
 export const PERSON_COLOURS = [
