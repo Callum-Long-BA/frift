@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, AuthError, clearPasscode, getPasscode } from './api.js';
-import { EXERCISES } from './lib/constants.js';
+import { MAX_EXERCISES, MODES } from './lib/constants.js';
 import { readStored, writeStored } from './lib/storage.js';
 import ControlPanel from './components/ControlPanel.jsx';
 import ExerciseChart from './components/ExerciseChart.jsx';
 import AddEntryDialog from './components/AddEntryDialog.jsx';
+import AddExerciseDialog from './components/AddExerciseDialog.jsx';
+import AddExerciseTile from './components/AddExerciseTile.jsx';
 import PasscodeGate from './components/PasscodeGate.jsx';
 
 const ME_KEY = 'frift.me';
@@ -13,20 +15,30 @@ const MODE_KEY = 'frift.mode';
 export default function App() {
   const [unlocked, setUnlocked] = useState(() => Boolean(getPasscode()));
   const [people, setPeople] = useState([]);
+  const [exercises, setExercises] = useState([]);
   const [entries, setEntries] = useState([]);
   const [status, setStatus] = useState('loading'); // loading | ready | error
   const [error, setError] = useState('');
   const [meId, setMeId] = useState(() => Number(readStored(ME_KEY)) || null);
-  const [mode, setMode] = useState(() => (readStored(MODE_KEY) === 'pct' ? 'pct' : 'total'));
+  const [mode, setMode] = useState(() => {
+    const stored = readStored(MODE_KEY);
+    return MODES.includes(stored) ? stored : 'total';
+  });
   const [dialogExerciseId, setDialogExerciseId] = useState(null);
+  const [addingExercise, setAddingExercise] = useState(false);
 
   const me = people.find((p) => p.id === meId) ?? null;
 
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setStatus('loading');
     try {
-      const [nextPeople, nextEntries] = await Promise.all([api.people(), api.entries()]);
+      const [nextPeople, nextExercises, nextEntries] = await Promise.all([
+        api.people(),
+        api.exercises(),
+        api.entries(),
+      ]);
       setPeople(nextPeople);
+      setExercises(nextExercises);
       setEntries(nextEntries);
       setError('');
       setStatus('ready');
@@ -47,7 +59,7 @@ export default function App() {
     if (unlocked) load();
   }, [unlocked, load]);
 
-  // Pick up friends' new entries when you come back to the tab.
+  // Pick up friends' new entries and exercises when you come back to the tab.
   useEffect(() => {
     if (!unlocked) return undefined;
     const onVisible = () => {
@@ -75,7 +87,7 @@ export default function App() {
 
   if (!unlocked) return <PasscodeGate onUnlock={() => setUnlocked(true)} />;
 
-  const dialogExercise = EXERCISES.find((e) => e.id === dialogExerciseId);
+  const dialogExercise = exercises.find((e) => e.id === dialogExerciseId);
 
   return (
     <main className="board" aria-busy={status === 'loading'}>
@@ -97,7 +109,13 @@ export default function App() {
         onModeChange={changeMode}
       />
 
-      {EXERCISES.map((exercise) => (
+      {status === 'loading' && exercises.length === 0 && (
+        <section className="panel">
+          <p className="chart-empty">Loading…</p>
+        </section>
+      )}
+
+      {exercises.map((exercise) => (
         <ExerciseChart
           key={exercise.id}
           exercise={exercise}
@@ -110,6 +128,15 @@ export default function App() {
         />
       ))}
 
+      {status === 'ready' && (
+        <AddExerciseTile
+          canAdd={Boolean(me)}
+          count={exercises.length}
+          atLimit={exercises.length >= MAX_EXERCISES}
+          onAdd={() => setAddingExercise(true)}
+        />
+      )}
+
       {dialogExercise && me && (
         <AddEntryDialog
           key={`${dialogExercise.id}-${me.id}`}
@@ -119,6 +146,15 @@ export default function App() {
           onClose={() => setDialogExerciseId(null)}
           onSaved={(rows) => setEntries((prev) => [...prev, ...rows])}
           onDeleted={(id) => setEntries((prev) => prev.filter((e) => e.id !== id))}
+        />
+      )}
+
+      {addingExercise && me && (
+        <AddExerciseDialog
+          person={me}
+          exercises={exercises}
+          onClose={() => setAddingExercise(false)}
+          onCreated={(exercise) => setExercises((prev) => [...prev, exercise])}
         />
       )}
     </main>

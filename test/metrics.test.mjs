@@ -1,16 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { EXERCISES } from '../src/lib/constants.js';
 import {
   buildChartData,
-  dailyTotals,
+  dailySummaries,
   nextSetNumber,
   pickTicks,
   seriesKey,
 } from '../src/lib/metrics.js';
 
-const bench = EXERCISES.find((e) => e.id === 'bench_press');
-const cardio = EXERCISES.find((e) => e.id === 'cardio');
+const bench = { id: 'bench_press', name: 'Bench press', kind: 'strength' };
+const cardio = { id: 'cardio', name: 'Cardio', kind: 'cardio' };
 
 let nextId = 1;
 const set = (person_id, date, set_number, weight, reps, exercise = 'bench_press') => ({
@@ -19,6 +18,10 @@ const set = (person_id, date, set_number, weight, reps, exercise = 'bench_press'
 const run = (person_id, date, duration_min) => ({
   id: nextId++, person_id, exercise: 'cardio', date, set_number: 1, weight: null, reps: null, duration_min,
 });
+const value = (entries, exercise, person, date, mode = 'total') =>
+  dailySummaries(entries, exercise, mode).get(person).get(date).value;
+
+// ---------- total weight ----------
 
 test('only the last 3 sets of the day count', () => {
   const entries = [
@@ -28,19 +31,19 @@ test('only the last 3 sets of the day count', () => {
     set(1, '2026-09-01', 4, 60, 8),  // 480
     set(1, '2026-09-01', 5, 60, 6),  // 360
   ];
-  assert.equal(dailyTotals(entries, bench).get(1).get('2026-09-01'), 480 + 480 + 360);
+  assert.equal(value(entries, bench, 1, '2026-09-01'), 480 + 480 + 360);
 });
 
 test('someone doing 5 sets is not ahead of someone doing 3 identical sets', () => {
   const three = [1, 2, 3].map((n) => set(1, '2026-09-01', n, 60, 8));
   const five = [1, 2, 3, 4, 5].map((n) => set(2, '2026-09-01', n, 60, 8));
-  const totals = dailyTotals([...three, ...five], bench);
-  assert.equal(totals.get(1).get('2026-09-01'), totals.get(2).get('2026-09-01'));
+  const all = [...three, ...five];
+  assert.equal(value(all, bench, 1, '2026-09-01'), value(all, bench, 2, '2026-09-01'));
 });
 
 test('fewer than 3 sets sums what exists', () => {
   const entries = [set(1, '2026-09-01', 1, 100, 5), set(1, '2026-09-01', 2, 100, 4)];
-  assert.equal(dailyTotals(entries, bench).get(1).get('2026-09-01'), 900);
+  assert.equal(value(entries, bench, 1, '2026-09-01'), 900);
 });
 
 test('"last" is by set number, not by row order', () => {
@@ -50,7 +53,7 @@ test('"last" is by set number, not by row order', () => {
     set(1, '2026-09-01', 3, 60, 8),
     set(1, '2026-09-01', 2, 60, 8),
   ];
-  assert.equal(dailyTotals(entries, bench).get(1).get('2026-09-01'), 60 * 8 * 3);
+  assert.equal(value(entries, bench, 1, '2026-09-01'), 60 * 8 * 3);
 });
 
 test('other exercises and other people do not leak into a chart', () => {
@@ -59,10 +62,106 @@ test('other exercises and other people do not leak into a chart', () => {
     set(1, '2026-09-01', 1, 100, 5, 'squat'),
     set(2, '2026-09-01', 1, 20, 10),
   ];
-  const totals = dailyTotals(entries, bench);
-  assert.equal(totals.get(1).get('2026-09-01'), 480);
-  assert.equal(totals.get(2).get('2026-09-01'), 200);
+  assert.equal(value(entries, bench, 1, '2026-09-01'), 480);
+  assert.equal(value(entries, bench, 2, '2026-09-01'), 200);
 });
+
+test('a custom exercise charts the same way as the originals', () => {
+  const rdl = { id: 'romanian_deadlift', name: 'Romanian deadlift', kind: 'strength' };
+  const entries = [1, 2, 3, 4].map((n) => set(1, '2026-09-01', n, 80, 8, 'romanian_deadlift'));
+  assert.equal(value(entries, rdl, 1, '2026-09-01'), 80 * 8 * 3);
+});
+
+// ---------- best set ----------
+
+test('best set is the single set with the highest weight x reps', () => {
+  const entries = [
+    set(1, '2026-09-01', 1, 60, 8),  // 480
+    set(1, '2026-09-01', 2, 70, 8),  // 560  <- best
+    set(1, '2026-09-01', 3, 60, 6),  // 360
+  ];
+  assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 560);
+});
+
+test('best set looks at ALL sets of the day, not just the last 3', () => {
+  const entries = [
+    set(1, '2026-09-01', 1, 80, 10), // 800  <- best, but early
+    set(1, '2026-09-01', 2, 60, 8),
+    set(1, '2026-09-01', 3, 60, 8),
+    set(1, '2026-09-01', 4, 60, 8),
+    set(1, '2026-09-01', 5, 50, 8),
+  ];
+  assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 800);
+  assert.equal(value(entries, bench, 1, '2026-09-01', 'total'), 480 + 480 + 400);
+});
+
+test('best set can favour more reps over more weight', () => {
+  const entries = [set(1, '2026-09-01', 1, 100, 3), set(1, '2026-09-01', 2, 60, 8)];
+  assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 480); // 60x8 beats 100x3
+});
+
+test('best mode charts one point per day using the best set', () => {
+  const entries = [
+    set(1, '2026-09-01', 1, 60, 8), set(1, '2026-09-01', 2, 70, 8),
+    set(1, '2026-09-08', 1, 65, 8),
+  ];
+  const { rows } = buildChartData(entries, bench, 'best');
+  assert.deepEqual(rows.map((r) => r[seriesKey(1)]), [560, 520]);
+});
+
+test('cardio is minutes in best mode too', () => {
+  const entries = [run(1, '2026-09-01', 25)];
+  const { rows } = buildChartData(entries, cardio, 'best');
+  assert.equal(rows[0][seriesKey(1)], 25);
+});
+
+// ---------- tooltip detail: every set ----------
+
+test('each data point carries every set that person did that day, in order', () => {
+  const entries = [
+    set(1, '2026-09-01', 3, 60, 6),
+    set(1, '2026-09-01', 1, 40, 10),
+    set(1, '2026-09-01', 2, 60, 8),
+    set(1, '2026-09-01', 4, 62.5, 5),
+  ];
+  const { rows } = buildChartData(entries, bench, 'total');
+  const sets = rows[0].detail[seriesKey(1)];
+  assert.deepEqual(sets.map((s) => [s.setNumber, s.weight, s.reps]), [
+    [1, 40, 10], [2, 60, 8], [3, 60, 6], [4, 62.5, 5],
+  ]);
+});
+
+test('in total mode the last 3 sets are flagged as counting', () => {
+  const entries = [1, 2, 3, 4, 5].map((n) => set(1, '2026-09-01', n, 60, 8));
+  const sets = buildChartData(entries, bench, 'total').rows[0].detail[seriesKey(1)];
+  assert.deepEqual(sets.map((s) => s.counts), [false, false, true, true, true]);
+});
+
+test('in best mode only the best set is flagged as counting', () => {
+  const entries = [set(1, '2026-09-01', 1, 60, 8), set(1, '2026-09-01', 2, 70, 8), set(1, '2026-09-01', 3, 60, 6)];
+  const sets = buildChartData(entries, bench, 'best').rows[0].detail[seriesKey(1)];
+  assert.deepEqual(sets.map((s) => s.counts), [false, true, false]);
+});
+
+test('detail is kept per person, so the tooltip never mixes people up', () => {
+  const entries = [set(1, '2026-09-01', 1, 60, 8), set(2, '2026-09-01', 1, 20, 10), set(2, '2026-09-01', 2, 25, 10)];
+  const { rows } = buildChartData(entries, bench, 'total');
+  assert.equal(rows[0].detail[seriesKey(1)].length, 1);
+  assert.equal(rows[0].detail[seriesKey(2)].length, 2);
+});
+
+test('cardio points have no set detail', () => {
+  const { rows } = buildChartData([run(1, '2026-09-01', 30)], cardio, 'total');
+  assert.deepEqual(rows[0].detail, {});
+});
+
+test('% mode still carries set detail', () => {
+  const entries = [set(1, '2026-09-01', 1, 60, 8), set(1, '2026-09-08', 1, 66, 8)];
+  const { rows } = buildChartData(entries, bench, 'pct');
+  assert.equal(rows[1].detail[seriesKey(1)][0].weight, 66);
+});
+
+// ---------- % change and layout ----------
 
 test('cardio uses minutes', () => {
   const entries = [run(1, '2026-09-01', 25), run(1, '2026-09-03', 30)];

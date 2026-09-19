@@ -630,3 +630,102 @@ fieldset {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* ---------- Tooltip: sets ---------- */
+
+.tip {
+  max-width: 17rem;
+}
+
+.tip ul {
+  gap: 8px;
+}
+
+.tip-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tip-sets {
+  margin-top: 2px;
+  padding-left: 26px; /* lines up under the name, past the swatch */
+  color: var(--muted-on-ink);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+
+.tip-sets-label {
+  margin-right: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+}
+
+.tip-set {
+  opacity: 0.6;
+}
+
+.tip-set.is-counted {
+  color: var(--chalk);
+  font-weight: 700;
+  opacity: 1;
+}
+
+.tip-note {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--ink-line);
+  color: var(--muted-on-ink);
+  font-size: 0.75rem;
+}
+
+/* ---------- Add-exercise tile ---------- */
+
+.add-tile {
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: transparent;
+  border: 2px dashed #b3b9bf;
+  text-align: center;
+}
+
+.add-tile-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.7rem 1.3rem;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  font-family: var(--display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.add-tile-btn:hover:not(:disabled) {
+  background: var(--plate);
+  border-color: var(--plate);
+  color: #fff;
+}
+
+.add-tile-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.add-tile-plus {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.sheet input[type='text'] {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  background: var(--paper);
+  border: 1px solid #b9bfc5;
+  border-radius: var(--radius-control);
+}

@@ -1,0 +1,100 @@
+import { useEffect, useRef, useState } from 'react';
+import { api } from '../api.js';
+import { MAX_EXERCISES, MAX_EXERCISE_NAME } from '../lib/constants.js';
+
+export default function AddExerciseDialog({ person, exercises, onClose, onCreated }) {
+  const dialogRef = useRef(null);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
+  }, []);
+
+  const closeDialog = () => dialogRef.current?.close();
+
+  async function submit(event) {
+    event.preventDefault();
+    const clean = name.trim().replace(/\s+/g, ' ');
+    if (!clean) {
+      setError('Enter a name for the exercise.');
+      return;
+    }
+    if (exercises.some((x) => x.name.toLowerCase() === clean.toLowerCase())) {
+      setError('That exercise already exists.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const created = await api.addExercise(clean, person.id);
+      onCreated(created);
+      closeDialog();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="sheet-dialog"
+      aria-labelledby="exercise-dialog-title"
+      onClose={onClose}
+      onClick={(event) => {
+        if (event.target === dialogRef.current) closeDialog();
+      }}
+    >
+      <form className="sheet" onSubmit={submit}>
+        <header className="sheet-head">
+          <div>
+            <h2 id="exercise-dialog-title">Add an exercise</h2>
+            <p className="sheet-sub">
+              <span className="swatch" style={{ background: person.colour }} aria-hidden="true" />
+              {person.name}
+            </p>
+          </div>
+          <button type="button" className="icon-btn" aria-label="Close" onClick={closeDialog}>
+            ×
+          </button>
+        </header>
+
+        <div className="field">
+          <label htmlFor="exercise-name">Exercise name</label>
+          <input
+            id="exercise-name"
+            type="text"
+            maxLength={MAX_EXERCISE_NAME}
+            placeholder="Romanian deadlift"
+            value={name}
+            disabled={busy}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+          />
+          <p className="hint">
+            Everyone in the group will see it. It is logged as weight × reps, and it cannot be removed from the app
+            once added, so check the spelling. {exercises.length} of {MAX_EXERCISES} used.
+          </p>
+        </div>
+
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+
+        <div className="sheet-actions">
+          <button type="button" className="ghost" onClick={closeDialog}>
+            Cancel
+          </button>
+          <button type="submit" className="primary" disabled={busy}>
+            {busy ? 'Adding…' : 'Add exercise'}
+          </button>
+        </div>
+      </form>
+    </dialog>
+  );
+}

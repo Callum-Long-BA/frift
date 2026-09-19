@@ -1,4 +1,4 @@
-import { EXERCISES, MAX_SETS_PER_ENTRY } from '../src/lib/constants.js';
+import { MAX_EXERCISE_NAME, MAX_SETS_PER_ENTRY } from '../src/lib/constants.js';
 import { HttpError } from './_http.js';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -22,6 +22,26 @@ export function parseName(value) {
   return name;
 }
 
+export function parseExerciseName(value) {
+  const name = String(value ?? '').trim().replace(/\s+/g, ' ');
+  if (name.length < 1 || name.length > MAX_EXERCISE_NAME) {
+    throw new HttpError(400, `Exercise name must be 1 to ${MAX_EXERCISE_NAME} characters.`);
+  }
+  return name;
+}
+
+// "Incline Bench Press!" -> "incline_bench_press". Accents are stripped.
+export function slugify(name) {
+  const slug = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  if (!slug) throw new HttpError(400, 'Use at least one letter or number in the exercise name.');
+  return slug;
+}
+
 export function parseDate(value, now = new Date()) {
   if (typeof value !== 'string' || !DATE_RE.test(value)) {
     throw new HttpError(400, 'Date must look like 2026-09-19.');
@@ -38,12 +58,13 @@ export function parseDate(value, now = new Date()) {
   return value;
 }
 
+// `exercises` is the list from the database: [{ id, kind }].
 // Returns a normalised entry:
 //   { kind: 'strength', personId, exercise, date, sets: [{ weight, reps }] }
 //   { kind: 'cardio',   personId, exercise, date, durationMin }
-export function parseNewEntry(body, now = new Date()) {
+export function parseNewEntry(body, exercises, now = new Date()) {
   const personId = parseId(body?.personId, 'Person');
-  const exercise = EXERCISES.find((e) => e.id === body?.exercise);
+  const exercise = exercises.find((e) => e.id === body?.exercise);
   if (!exercise) throw new HttpError(400, 'Unknown exercise.');
   const date = parseDate(body?.date, now);
 

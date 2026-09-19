@@ -20,24 +20,60 @@ import {
   seriesKey,
 } from '../lib/metrics.js';
 
-function ChartTooltip({ active, payload, label, mode, kind }) {
+// Hover card: everyone's value for that day, plus every set they did.
+// Sets that count toward the chart in the current mode are bold; the rest are faded.
+export function ChartTooltip({ active, payload, label, mode, kind }) {
   if (!active || !payload?.length) return null;
   const items = payload.filter((p) => p.value !== null && p.value !== undefined).sort((a, b) => b.value - a.value);
   if (items.length === 0) return null;
+
+  const setsFor = (item) => item.payload?.detail?.[item.dataKey] ?? [];
+  const anyFaded = items.some((item) => setsFor(item).some((s) => !s.counts));
+
   return (
     <div className="tip">
       <p className="tip-date">{formatDayLong(label)}</p>
       <ul>
-        {items.map((item) => (
-          <li key={item.dataKey}>
-            <span className="swatch" style={{ background: item.color ?? item.stroke }} aria-hidden="true" />
-            <span className="tip-name">{item.name}</span>
-            <span className="tip-value">{formatAmount(item.value, mode, kind)}</span>
-          </li>
-        ))}
+        {items.map((item) => {
+          const sets = setsFor(item);
+          return (
+            <li key={item.dataKey}>
+              <div className="tip-line">
+                <span className="swatch" style={{ background: item.color ?? item.stroke }} aria-hidden="true" />
+                <span className="tip-name">{item.name}</span>
+                <span className="tip-value">{formatAmount(item.value, mode, kind)}</span>
+              </div>
+              {sets.length > 0 && (
+                <p className="tip-sets">
+                  <span className="tip-sets-label">Sets</span>
+                  {sets.map((s, i) => (
+                    <span key={s.setNumber} className={s.counts ? 'tip-set is-counted' : 'tip-set'}>
+                      {i > 0 && ', '}
+                      {s.weight}×{s.reps}
+                    </span>
+                  ))}
+                </p>
+              )}
+            </li>
+          );
+        })}
       </ul>
+      {anyFaded && (
+        <p className="tip-note">
+          {mode === 'best'
+            ? 'Bold is the best set of the day. Faded sets are not counted.'
+            : `Faded sets are earlier than the last ${COUNTED_SETS}, so they do not count.`}
+        </p>
+      )}
     </div>
   );
+}
+
+function subtitleFor(exercise, mode) {
+  if (exercise.kind === 'cardio') return mode === 'pct' ? 'Minutes, change since first log' : 'Minutes per day';
+  if (mode === 'pct') return 'Total weight, change since first log';
+  if (mode === 'best') return 'Best set of the day, weight × reps, kg';
+  return `Last ${COUNTED_SETS} sets, weight × reps, kg`;
 }
 
 export default function ExerciseChart({ exercise, people, entries, me, mode, loading, onAdd }) {
@@ -54,12 +90,7 @@ export default function ExerciseChart({ exercise, people, entries, me, mode, loa
 
   const ticks = useMemo(() => pickTicks(rows), [rows]);
 
-  const subtitle =
-    mode === 'pct'
-      ? 'Change since your first log'
-      : exercise.kind === 'cardio'
-        ? 'Minutes per day'
-        : `Last ${COUNTED_SETS} sets, weight × reps, kg`;
+  const subtitle = subtitleFor(exercise, mode);
 
   const emptyText = loading
     ? 'Loading…'
@@ -109,7 +140,13 @@ export default function ExerciseChart({ exercise, people, entries, me, mode, loa
                 tickFormatter={(v) => (mode === 'pct' ? `${v}%` : v)}
               />
               {mode === 'pct' && <ReferenceLine y={0} stroke="#9AA1A9" strokeDasharray="4 4" />}
-              <Tooltip content={<ChartTooltip mode={mode} kind={exercise.kind} />} cursor={{ stroke: '#9AA1A9' }} />
+              <Tooltip
+                content={<ChartTooltip mode={mode} kind={exercise.kind} />}
+                cursor={{ stroke: '#9AA1A9' }}
+                allowEscapeViewBox={{ x: false, y: true }}
+                wrapperStyle={{ zIndex: 20, outline: 'none' }}
+                isAnimationActive={false}
+              />
               {drawn.map((person) => {
                 const isMe = person.id === me?.id;
                 const dimmed = Boolean(me) && !isMe;

@@ -10,12 +10,20 @@ Shared lifting progress for a small group. One line chart per exercise, one colo
 ## How the numbers work
 
 - Every set is logged separately (weight and reps).
-- For each person, exercise and day, only the **last 3 sets** count. The chart value is the sum of weight x reps across those sets, so doing 5 sets does not beat doing 3.
-- Cardio is minutes, one entry per person per day.
-- **Charts show** switches between total weight and % change. % change is measured from each person's own first logged day for that exercise, so both lines start at 0%.
+- **Total weight:** for each person, exercise and day, only the **last 3 sets** count. The value is the sum of weight x reps across those sets, so doing 5 sets does not beat doing 3.
+- **% change:** the total weight above, measured as % change from each person's own first logged day for that exercise, so every line starts at 0%.
+- **Best set:** the single set with the highest weight x reps that day. This looks at **all** sets of the day, not just the last 3, so a strong early set still counts.
+- **Cardio** is minutes, one entry per person per day, and looks the same in every mode.
+- Hover a data point on any weight x reps chart to see every set each person did that day. Bold sets are the ones counting toward the chart in the current mode; faded sets are not.
 - Choosing your name in the top-left cell thickens your line, dims everyone else's, and switches on the + buttons. That choice is remembered in your browser only.
 
-## Set up
+## Exercises
+
+- Anyone can add an exercise with the **Add exercise** tile at the end of the grid. New exercises are always weight x reps.
+- New charts appear for everyone, in the order they were added. The limit is 20 exercises (`MAX_EXERCISES` in `src/lib/constants.js`).
+- There is no delete in the app, on purpose, so nobody loses history to a mis-tap. To remove or rename one, use the Neon SQL editor (see below).
+
+## Set up (first time)
 
 ### 1. Push to GitHub
 
@@ -32,23 +40,26 @@ git push -u origin main
 
 ### 2. Import into Vercel
 
-Vercel dashboard > Add New > Project > pick the `frift` repo. Vercel detects Vite by itself, so leave the defaults and deploy. The first deploy will load but show errors until steps 3 and 4 are done.
+Vercel dashboard > Add New > Project > pick the `frift` repo. Vercel detects Vite by itself, so leave the defaults and deploy.
 
 ### 3. Add the database
 
-In the Vercel project, open **Storage** (or the Marketplace), add **Neon**, and connect it to the project for all environments. This sets `DATABASE_URL` for you.
-
-Then open the database in Neon (there is an "Open in Neon" link on the Vercel storage page), go to the **SQL Editor**, paste in the contents of `schema.sql`, and run it.
+Add **Neon** from the Vercel Marketplace and connect it to the project so that `DATABASE_URL` is set. Then open the database in Neon, go to the **SQL Editor**, paste in the contents of `schema.sql` and run it.
 
 ### 4. Set the passcode
 
-Project > Settings > Environment Variables > add `FRIFT_PASSCODE` with whatever passcode you want to give your friends. Apply it to Production, Preview and Development, then **redeploy** (env vars only apply to new deployments).
+Project > Settings > Environment Variables > add `FRIFT_PASSCODE` with the passcode you want to share, then **redeploy** (env vars only apply to new deployments).
 
-### 5. Point frift.callumlong.com at it
+### 5. Point your domain at it
 
-1. Vercel project > Settings > Domains > add `frift.callumlong.com`.
-2. In your DNS provider (Cloudflare, if that is where callumlong.com lives) add a `CNAME` record: name `frift`, target as shown by Vercel (usually `cname.vercel-dns.com`).
-3. In Cloudflare set the record to **DNS only** (grey cloud) so Vercel can issue the certificate. Vercel shows a green tick once it is working.
+Vercel project > Settings > Domains > add your domain, then add the CNAME record it shows at your DNS provider (with Cloudflare, set the record to **DNS only**).
+
+## Updating an existing deployment
+
+When a new version adds database tables, do it in this order:
+
+1. Run the new `schema.sql` in the Neon SQL editor first. It is safe to re-run and does not touch existing data. The old version of the app keeps working while you do this.
+2. Copy the new files over your project folder (keep your `.git` folder), then `git add .`, `git commit` and `git push`. Vercel redeploys automatically.
 
 ## Run it locally
 
@@ -66,10 +77,11 @@ npm run dev          # runs vercel dev: front end and /api together
 
 ## Changing things
 
-- **Add an exercise:** add one line to `EXERCISES` in `src/lib/constants.js`. No database change.
-- **Change how many sets count:** `COUNTED_SETS` in the same file.
-- **Fix a mistake:** open the + dialog for that exercise, pick the date, and use Delete next to the entry. You can only delete your own.
-- **Rename someone or remove them:** do it in the Neon SQL editor, e.g. `update people set name = 'Sam' where id = 2;`
+- **Sets that count toward the total:** `COUNTED_SETS` in `src/lib/constants.js`.
+- **Fix a mistake in a log:** open the + dialog for that exercise, pick the date, and use Delete next to the entry. You can only delete your own.
+- **Rename an exercise:** in Neon, `update exercises set name = 'Romanian deadlift' where id = 'romanian_deadlift';`
+- **Remove an exercise and all its entries:** in Neon, `delete from entries where exercise = 'romanian_deadlift'; delete from exercises where id = 'romanian_deadlift';`
+- **Rename someone:** in Neon, `update people set name = 'Sam' where id = 2;`
 
 ## Limits worth knowing
 

@@ -1,4 +1,5 @@
--- Run this once in the Neon SQL editor. It is safe to run again.
+-- Run this in the Neon SQL editor. It is safe to run again, and safe to run
+-- on a database that already has FRIFT data in it.
 
 create table if not exists people (
   id         serial primary key,
@@ -9,6 +10,29 @@ create table if not exists people (
 
 -- Names are unique ignoring case, so "Sam" and "sam" cannot both exist.
 create unique index if not exists people_name_unique on people (lower(name));
+
+-- The list of exercises. Anyone in the group can add one from the app.
+create table if not exists exercises (
+  id         text primary key,                      -- slug, e.g. 'bench_press'
+  name       text not null,
+  kind       text not null default 'strength' check (kind in ('strength', 'cardio')),
+  created_by int references people(id) on delete set null,
+  sort_order serial,                                -- charts appear in this order
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists exercises_name_unique on exercises (lower(name));
+
+-- The original seven. Do not add sort_order here: the sequence numbers them in order.
+insert into exercises (id, name, kind) values
+  ('bench_press',     'Bench press',           'strength'),
+  ('lat_pulldown',    'Lat pull down',         'strength'),
+  ('squat',           'Squat',                 'strength'),
+  ('leg_extension',   'Leg extension',         'strength'),
+  ('shoulder_press',  'Shoulder press',        'strength'),
+  ('incline_db_curl', 'Incline dumbbell curl', 'strength'),
+  ('cardio',          'Cardio',                'cardio')
+on conflict do nothing;
 
 -- One row per set. Cardio is one row per day with only duration_min filled in.
 create table if not exists entries (
@@ -31,6 +55,15 @@ create table if not exists entries (
     coalesce(weight, 0) >= 0 and coalesce(reps, 1) >= 1 and coalesce(duration_min, 1) > 0
   )
 );
+
+-- Every entry must belong to a real exercise.
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'entries_exercise_fk') then
+    alter table entries
+      add constraint entries_exercise_fk foreign key (exercise) references exercises(id);
+  end if;
+end $$;
 
 -- Set numbers are unique per person, exercise and day.
 create unique index if not exists entries_set_unique
