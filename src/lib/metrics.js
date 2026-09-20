@@ -44,7 +44,10 @@ const factorFor = (row, equalise) => (equalise && row.equipment === 'dumbbell' ?
 // mode 'total' (default):
 //   value = sum of weight x reps over the LAST 3 sets (by set number) of the day.
 // mode 'best':
-//   value = the single set with the highest weight x reps that day, from ALL sets.
+//   the best set is the one with the highest weight x reps that day, from ALL sets.
+//   value = the WEIGHT of that set (doubled for equalised dumbbells). Its reps are
+//   shown by the chart as the size of the dot.
+
 // Cardio is minutes in either mode and has no sets.
 //
 // `sets` lists every set that day, with `counts: true` on the sets that
@@ -81,16 +84,17 @@ export function dailySummaries(entries, exercise, mode = 'total', { equalise = f
 
       if (mode === 'best') {
         let bestIndex = 0;
-        let bestValue = -Infinity;
+        let bestVolume = -Infinity;
         sets.forEach((s, i) => {
           const v = volume(s);
-          if (v > bestValue) {
-            bestValue = v;
+          if (v > bestVolume) {
+            bestVolume = v;
             bestIndex = i;
           }
         });
-        sets[bestIndex].counts = true;
-        value = bestValue;
+        const best = sets[bestIndex];
+        best.counts = true;
+        value = best.weight * best.factor;
       } else {
         const counted = sets.slice(-COUNTED_SETS);
         counted.forEach((s) => {
@@ -144,6 +148,12 @@ export function buildChartData(entries, exercise, mode, { equalise = false } = {
   });
 
   return { rows, personIds: [...perPerson.keys()] };
+}
+
+// Dot radius for a best set: the dot's AREA grows with reps, clamped so 1 rep is
+// still visible and 30 reps does not swamp the chart.
+export function repsRadius(reps) {
+  return Math.max(3, Math.min(12, 2.5 * Math.sqrt(reps)));
 }
 
 // Up to `max` evenly spread x-axis ticks, always on real logged dates.

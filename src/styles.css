@@ -802,3 +802,27 @@ fieldset {
   display: block;
   font-weight: 400;
 }
+
+/* ---------- Crash screen ---------- */
+
+.crash {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+  max-width: 34rem;
+  min-height: 100vh;
+  padding: 32px 20px;
+  margin: 0 auto;
+  align-content: center;
+  color: var(--ink);
+}
+
+.crash pre {
+  max-width: 100%;
+  padding: 10px 12px;
+  overflow: auto;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  white-space: pre-wrap;
+}

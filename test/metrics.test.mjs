@@ -5,6 +5,7 @@ import {
   dailySummaries,
   nextSetNumber,
   pickTicks,
+  repsRadius,
   seriesKey,
 } from '../src/lib/metrics.js';
 
@@ -74,13 +75,13 @@ test('a custom exercise charts the same way as the originals', () => {
 
 // ---------- best set ----------
 
-test('best set is the single set with the highest weight x reps', () => {
+test('best set plots the WEIGHT of the set with the highest weight x reps', () => {
   const entries = [
     set(1, '2026-09-01', 1, 60, 8),  // 480
-    set(1, '2026-09-01', 2, 70, 8),  // 560  <- best
+    set(1, '2026-09-01', 2, 70, 8),  // 560  <- best, so y = 70
     set(1, '2026-09-01', 3, 60, 6),  // 360
   ];
-  assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 560);
+  assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 70);
 });
 
 test('best set looks at ALL sets of the day, not just the last 3', () => {
@@ -91,13 +92,15 @@ test('best set looks at ALL sets of the day, not just the last 3', () => {
     set(1, '2026-09-01', 4, 60, 8),
     set(1, '2026-09-01', 5, 50, 8),
   ];
-  assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 800);
+  assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 80); // the early 80x10 set (800)
   assert.equal(value(entries, bench, 1, '2026-09-01', 'total'), 480 + 480 + 400);
 });
 
-test('best set can favour more reps over more weight', () => {
+test('best set is chosen by weight x reps, so 60x8 beats 100x3 and y shows 60', () => {
   const entries = [set(1, '2026-09-01', 1, 100, 3), set(1, '2026-09-01', 2, 60, 8)];
-  assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 480); // 60x8 beats 100x3
+  assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 60);
+  const sets = buildChartData(entries, bench, 'best').rows[0].detail[seriesKey(1)];
+  assert.equal(sets.find((s) => s.counts).reps, 8); // the dot is sized by these reps
 });
 
 test('best mode charts one point per day using the best set', () => {
@@ -106,7 +109,7 @@ test('best mode charts one point per day using the best set', () => {
     set(1, '2026-09-08', 1, 65, 8),
   ];
   const { rows } = buildChartData(entries, bench, 'best');
-  assert.deepEqual(rows.map((r) => r[seriesKey(1)]), [560, 520]);
+  assert.deepEqual(rows.map((r) => r[seriesKey(1)]), [70, 65]);
 });
 
 test('cardio is minutes in best mode too', () => {
@@ -254,8 +257,9 @@ test('equalise applies set by set when a day mixes barbell and dumbbell', () => 
 
 test('equalise changes which set is best', () => {
   const entries = [bb(1, '2026-09-01', 1, 50, 10), db(1, '2026-09-01', 2, 30, 10)]; // 500 vs 300 (or 600 doubled)
-  assert.equal(dailySummaries(entries, bench, 'best').get(1).get('2026-09-01').value, 500);
-  assert.equal(dailySummaries(entries, bench, 'best', { equalise: true }).get(1).get('2026-09-01').value, 600);
+  // Off: the barbell set wins, so y = 50. On: the dumbbell set counts as 60 x 10 and wins, so y = 60.
+  assert.equal(dailySummaries(entries, bench, 'best').get(1).get('2026-09-01').value, 50);
+  assert.equal(dailySummaries(entries, bench, 'best', { equalise: true }).get(1).get('2026-09-01').value, 60);
 });
 
 test('% change: switching from barbell to dumbbell is flat once equalised', () => {
@@ -279,4 +283,25 @@ test('tooltip detail keeps the logged weight and the equipment, plus the factor 
 test('equalise never changes cardio', () => {
   const { rows } = buildChartData([run(1, '2026-09-01', 30)], cardio, 'total', { equalise: true });
   assert.equal(rows[0][seriesKey(1)], 30);
+});
+
+test('dot radius grows with reps, never vanishes and never swamps the chart', () => {
+  assert.ok(repsRadius(1) >= 3);
+  assert.ok(repsRadius(5) < repsRadius(10));
+  assert.ok(repsRadius(10) < repsRadius(20));
+  assert.equal(repsRadius(500), 12);
+  assert.ok(repsRadius(0) >= 3);
+});
+
+test('best mode: one dot per person per day, with that day\'s best reps available for sizing', () => {
+  const entries = [
+    set(1, '2026-09-01', 1, 60, 8), set(1, '2026-09-01', 2, 70, 5), // 480 vs 350 -> 60x8
+    set(2, '2026-09-01', 1, 40, 12),
+  ];
+  const { rows } = buildChartData(entries, bench, 'best');
+  const best = (key) => rows[0].detail[key].find((s) => s.counts);
+  assert.equal(rows[0][seriesKey(1)], 60);
+  assert.equal(best(seriesKey(1)).reps, 8);
+  assert.equal(rows[0][seriesKey(2)], 40);
+  assert.equal(best(seriesKey(2)).reps, 12);
 });

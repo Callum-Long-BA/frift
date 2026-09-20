@@ -3,6 +3,7 @@ import { api, AuthError, clearPasscode, getPasscode } from './api.js';
 import { MAX_EXERCISES, MODES } from './lib/constants.js';
 import { readStored, writeStored } from './lib/storage.js';
 import ControlPanel from './components/ControlPanel.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 import ExerciseChart from './components/ExerciseChart.jsx';
 import AddEntryDialog from './components/AddEntryDialog.jsx';
 import AddExerciseDialog from './components/AddExerciseDialog.jsx';
@@ -63,12 +64,7 @@ export default function App() {
 
   // Pick up friends' new entries and exercises when you come back to the tab.
   useEffect(() => {
-    function changeEqualise(next) {
-    setEqualise(next);
-    writeStored(EQUALISE_KEY, next ? '1' : '0');
-  }
-
-  if (!unlocked) return undefined;
+    if (!unlocked) return undefined;
     const onVisible = () => {
       if (document.visibilityState === 'visible') load({ quiet: true });
     };
@@ -90,6 +86,11 @@ export default function App() {
   function changeMode(next) {
     setMode(next);
     writeStored(MODE_KEY, next);
+  }
+
+  function changeEqualise(next) {
+    setEqualise(next);
+    writeStored(EQUALISE_KEY, next ? '1' : '0');
   }
 
   if (!unlocked) return <PasscodeGate onUnlock={() => setUnlocked(true)} />;
@@ -125,17 +126,28 @@ export default function App() {
       )}
 
       {exercises.map((exercise) => (
-        <ExerciseChart
+        <ErrorBoundary
           key={exercise.id}
-          exercise={exercise}
-          people={people}
-          entries={entries}
-          me={me}
-          mode={mode}
-          equalise={equalise}
-          loading={status === 'loading'}
-          onAdd={() => setDialogExerciseId(exercise.id)}
-        />
+          resetKey={`${mode}-${equalise}-${entries.length}`}
+          fallback={(error) => (
+            <section className="panel">
+              <p className="chart-empty">
+                {exercise.name} could not be drawn: {String(error?.message ?? error)}
+              </p>
+            </section>
+          )}
+        >
+          <ExerciseChart
+            exercise={exercise}
+            people={people}
+            entries={entries}
+            me={me}
+            mode={mode}
+            equalise={equalise}
+            loading={status === 'loading'}
+            onAdd={() => setDialogExerciseId(exercise.id)}
+          />
+        </ErrorBoundary>
       ))}
 
       {status === 'ready' && (
