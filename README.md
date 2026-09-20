@@ -12,7 +12,7 @@ Shared lifting progress for a small group. One line chart per exercise, one colo
 - Every set is logged separately (weight and reps).
 - **Total weight:** for each person, exercise and day, only the **last 3 sets** count. The value is the sum of weight x reps across those sets, so doing 5 sets does not beat doing 3.
 - **% change:** the total weight above, measured as % change from each person's own first logged day for that exercise, so every line starts at 0%.
-- **Best set:** the single set with the highest weight x reps that day. This looks at **all** sets of the day, not just the last 3, so a strong early set still counts.
+- **Best set:** each day's best set is the one with the highest weight x reps, looking at **all** sets of the day, not just the last 3. The chart's vertical axis is that set's **weight**, and the size of the dot is its **reps** (bigger dot = more reps).
 - **Barbell or dumbbell:** Bench press, Squat and Shoulder press ask whether each batch of sets was barbell or dumbbell. For dumbbells, enter the weight of **one** dumbbell.
 - **Equalise** (checkbox in the top-left cell): counts dumbbell sets at double weight, in every mode, so dumbbell and barbell lifting can be compared on the same chart. It is off by default, and your tick is remembered in your browser. Sets with no equipment recorded, such as older entries, count as barbell.
 - **Cardio** is minutes, one entry per person per day, and looks the same in every mode.

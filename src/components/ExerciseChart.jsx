@@ -17,6 +17,7 @@ import {
   formatDay,
   formatDayLong,
   pickTicks,
+  repsRadius,
   seriesKey,
 } from '../lib/metrics.js';
 
@@ -42,7 +43,10 @@ export function ChartTooltip({ active, payload, label, mode, kind, equalise = fa
               <div className="tip-line">
                 <span className="swatch" style={{ background: item.color ?? item.stroke }} aria-hidden="true" />
                 <span className="tip-name">{item.name}</span>
-                <span className="tip-value">{formatAmount(item.value, mode, kind)}</span>
+                <span className="tip-value">
+                  {formatAmount(item.value, mode, kind)}
+                  {mode === 'best' && sets.find((s) => s.counts) && ` × ${sets.find((s) => s.counts).reps}`}
+                </span>
               </div>
               {sets.length > 0 && (
                 <p className="tip-sets">
@@ -78,11 +82,33 @@ export function ChartTooltip({ active, payload, label, mode, kind, equalise = fa
   );
 }
 
+// In best-set mode each dot is drawn by hand so its size can show the reps of that
+// day's best set. Recharts calls this with the point's position and its data row.
+function repsDot(person, opacity, active) {
+  return function drawDot({ cx, cy, payload }) {
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+    const best = (payload?.detail?.[seriesKey(person.id)] ?? []).find((s) => s.counts);
+    if (!best) return null;
+    return (
+      <circle
+        key={`${person.id}-${payload.t}`}
+        cx={cx}
+        cy={cy}
+        r={repsRadius(best.reps) + (active ? 1.5 : 0)}
+        fill={person.colour}
+        fillOpacity={opacity}
+        stroke={active ? '#fff' : 'none'}
+        strokeWidth={active ? 2 : 0}
+      />
+    );
+  };
+}
+
 function subtitleFor(exercise, mode, equalise) {
   if (exercise.kind === 'cardio') return mode === 'pct' ? 'Minutes, change since first log' : 'Minutes per day';
   let text;
   if (mode === 'pct') text = 'Total weight, change since first log';
-  else if (mode === 'best') text = 'Best set of the day, weight × reps, kg';
+  else if (mode === 'best') text = 'Best set of the day, kg. Bigger dot = more reps';
   else text = `Last ${COUNTED_SETS} sets, weight × reps, kg`;
   return equalise && exercise.equipment_choice ? `${text}. Dumbbells doubled.` : text;
 }
@@ -105,6 +131,7 @@ export default function ExerciseChart({ exercise, people, entries, me, mode, equ
   const ticks = useMemo(() => pickTicks(rows), [rows]);
 
   const subtitle = subtitleFor(exercise, mode, equalise);
+  const sizeByReps = mode === 'best' && exercise.kind !== 'cardio';
 
   const emptyText = loading
     ? 'Loading…'
@@ -174,8 +201,12 @@ export default function ExerciseChart({ exercise, people, entries, me, mode, equ
                     stroke={person.colour}
                     strokeWidth={isMe ? 4 : 2}
                     strokeOpacity={opacity}
-                    dot={{ r: isMe ? 4 : 2.5, fill: person.colour, fillOpacity: opacity, strokeWidth: 0 }}
-                    activeDot={{ r: isMe ? 6 : 4 }}
+                    dot={
+                      sizeByReps
+                        ? repsDot(person, opacity, false)
+                        : { r: isMe ? 4 : 2.5, fill: person.colour, fillOpacity: opacity, strokeWidth: 0 }
+                    }
+                    activeDot={sizeByReps ? repsDot(person, 1, true) : { r: isMe ? 6 : 4 }}
                     connectNulls
                     isAnimationActive={false}
                   />
