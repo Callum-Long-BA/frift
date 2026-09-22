@@ -1,11 +1,8 @@
 import { PERSON_PALETTE } from './constants.js';
 
-export const THEMES = ['dark', 'light'];
-export const THEME_KEY = 'frift.theme';
-
-// A person's stored colour is always the light value. On the dark theme, swap in its twin.
-export function colourFor(colour, theme) {
-  if (theme !== 'dark') return colour;
+// A person's stored colour is the original (light-background) value. The app is dark only,
+// so always show its lighter twin, which reads well on the dark panels.
+export function colourFor(colour) {
   const wanted = String(colour).toLowerCase();
   const match = PERSON_PALETTE.find((c) => c.light.toLowerCase() === wanted);
   return match ? match.dark : colour;
@@ -13,7 +10,4 @@ export function colourFor(colour, theme) {
 
 // Recharts draws SVG attributes, which cannot read CSS variables, so chart chrome
 // colours live here instead. Keep in step with the tokens in styles.css.
-export const CHART = {
-  dark: { grid: '#262B33', axis: '#3A414B', tick: '#A3AAB3', cursor: '#6B7280', zero: '#6B7280', ring: '#16191E' },
-  light: { grid: '#E4E7EA', axis: '#C9CED3', tick: '#5B636D', cursor: '#9AA1A9', zero: '#9AA1A9', ring: '#FFFFFF' },
-};
+export const CHART = { grid: '#262B33', axis: '#3A414B', tick: '#A3AAB3', cursor: '#6B7280', zero: '#6B7280' };

@@ -11,7 +11,8 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const isCardio = exercise.kind === 'cardio';
-  const hasEquipment = exercise.equipment_choice === true && !isCardio;
+  const repsOnly = exercise.kind === 'reps';
+  const hasEquipment = exercise.equipment_choice === true && !isCardio && !repsOnly;
 
   // Start on whatever this person used last time for this exercise, else barbell.
   const [equipment, setEquipment] = useState(() => {
@@ -70,15 +71,15 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
       for (let i = 0; i < sets.length; i++) {
         const { weight, reps } = sets[i];
         const label = `Set ${firstNewSet + i}`;
-        if (weight === '' || Number.isNaN(Number(weight)) || Number(weight) < 0) {
+        if (!repsOnly && (weight === '' || Number.isNaN(Number(weight)) || Number(weight) < 0)) {
           setError(`${label}: enter a weight in kg.`);
           return;
         }
-        if (!Number.isInteger(Number(reps)) || Number(reps) < 1) {
+        if (reps === '' || !Number.isInteger(Number(reps)) || Number(reps) < 1) {
           setError(`${label}: enter reps as a whole number, 1 or more.`);
           return;
         }
-        parsed.push({ weight: Number(weight), reps: Number(reps) });
+        parsed.push(repsOnly ? { reps: Number(reps) } : { weight: Number(weight), reps: Number(reps) });
       }
       payload = { personId: person.id, exercise: exercise.id, date, sets: parsed };
       if (hasEquipment) payload.equipment = equipment;
@@ -195,22 +196,26 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
             {sets.map((s, i) => {
               const n = firstNewSet + i;
               return (
-                <div className="set-row" key={i}>
+                <div className={repsOnly ? 'set-row reps-only' : 'set-row'} key={i}>
                   <span className="set-label">Set {n}</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    max="1000"
-                    step="0.5"
-                    placeholder={isDumbbell ? 'kg each' : 'kg'}
-                    aria-label={`Set ${n} weight in kilograms${isDumbbell ? ', per dumbbell' : ''}`}
-                    value={s.weight}
-                    onChange={(e) => updateSet(i, { weight: e.target.value })}
-                  />
-                  <span className="times" aria-hidden="true">
-                    ×
-                  </span>
+                  {!repsOnly && (
+                    <>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        max="1000"
+                        step="0.5"
+                        placeholder={isDumbbell ? 'kg each' : 'kg'}
+                        aria-label={`Set ${n} weight in kilograms${isDumbbell ? ', per dumbbell' : ''}`}
+                        value={s.weight}
+                        onChange={(e) => updateSet(i, { weight: e.target.value })}
+                      />
+                      <span className="times" aria-hidden="true">
+                        ×
+                      </span>
+                    </>
+                  )}
                   <input
                     type="number"
                     inputMode="numeric"
@@ -247,7 +252,13 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
             <ul className="logged">
               {logged.map((row) => (
                 <li key={row.id}>
-                  <span>{isCardio ? `${row.duration_min} min` : `Set ${row.set_number}: ${row.weight} kg × ${row.reps}${row.equipment ? `, ${row.equipment}` : ''}`}</span>
+                  <span>
+                    {isCardio
+                      ? `${row.duration_min} min`
+                      : row.weight === null
+                        ? `Set ${row.set_number}: ${row.reps} reps`
+                        : `Set ${row.set_number}: ${row.weight} kg × ${row.reps}${row.equipment ? `, ${row.equipment}` : ''}`}
+                  </span>
                   {!isCardio && countedIds.has(row.id) && <span className="tag">counts</span>}
                   <button type="button" className="text-btn danger" onClick={() => remove(row)}>
                     Delete

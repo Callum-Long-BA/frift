@@ -32,6 +32,7 @@ export default route({
   },
 
   // Strength: { personId, exercise, date, equipment?, sets: [{ weight, reps }] }
+  //   Reps-only exercises send sets: [{ reps }] and store a null weight.
   //   Set numbers continue from whatever that person already logged that day.
   //   equipment ('barbell' | 'dumbbell') is required for exercises that offer the choice.
   // Cardio:   { personId, exercise: 'cardio', date, durationMin }

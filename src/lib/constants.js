@@ -14,12 +14,16 @@ export const MAX_SETS_PER_ENTRY = 10;
 // entered per dumbbell, so the "Equalise" option doubles them to compare with a barbell.
 export const EQUIPMENT = ['barbell', 'dumbbell'];
 
+// Kinds of exercise people can add from the app: weight x reps, or reps only (e.g. pull-ups).
+// 'cardio' also exists, but only the built-in Cardio exercise uses it.
+export const ADDABLE_KINDS = ['strength', 'reps'];
+
 // What the charts can show: total weight, % change, or best single set.
 export const MODES = ['total', 'pct', 'best'];
 
 // Handed out in order as people join. The `light` value is what gets stored against a
-// person in the database; `dark` is the lighter twin shown on the dark theme, so the
-// same person keeps the same identity in both themes (and the old "black" stays visible).
+// person in the database; `dark` is the lighter twin actually shown, since the app is dark
+// only (so the old "black" stays visible).
 export const PERSON_PALETTE = [
   { name: 'red', light: '#E5322D', dark: '#FF5C57' },
   { name: 'blue', light: '#1F5FBF', dark: '#5B9BFF' },
@@ -33,7 +37,7 @@ export const PERSON_PALETTE = [
   { name: 'black', light: '#14161A', dark: '#F3F4F6' },
 ];
 
-// What the API stores. Unchanged for the database: still the light values.
+// What the API stores. Unchanged for the database: still the original (light) values.
 export const PERSON_COLOURS = PERSON_PALETTE.map((c) => c.light);
 
 // The activity strip shows this many weeks, Monday to Sunday, ending with the current week.

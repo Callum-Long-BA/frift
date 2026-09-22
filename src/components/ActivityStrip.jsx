@@ -10,6 +10,8 @@ const columnFor = (i) => 2 + i + Math.floor(i / 7);
 
 // One row per person, one box per day for the last few weeks. A box is filled in that
 // person's colour on days they logged anything. Today's column is outlined.
+// It fits in a single board tile: the boxes stretch to the tile's width, and in a narrow
+// tile the names shrink to their first few letters (see the container query in styles.css).
 export default function ActivityStrip({ people, entries, exercises, me }) {
   const today = todayString();
   const days = useMemo(() => weekGrid(today, ACTIVITY_WEEKS), [today]);
@@ -26,7 +28,7 @@ export default function ActivityStrip({ people, entries, exercises, me }) {
     <section className="panel activity" aria-labelledby="activity-title">
       <header>
         <h2 id="activity-title">Last {ACTIVITY_WEEKS} weeks</h2>
-        <p className="chart-sub">Days with anything logged</p>
+        <p className="chart-sub">Days with a set or cardio logged. Hover a box for details.</p>
       </header>
 
       {people.length === 0 ? (
@@ -56,9 +58,15 @@ export default function ActivityStrip({ people, entries, exercises, me }) {
             const byDate = activity.get(person.id);
             const loggedCount = days.filter((d) => byDate?.has(d.date)).length;
             return [
-              <span key={`n${person.id}`} className={isMe ? 'act-name is-me' : 'act-name'} style={{ gridColumn: 1, gridRow: row }}>
-                {person.name}
+              <span key={`n${person.id}`} className={isMe ? 'act-name is-me' : 'act-name'} style={{ gridColumn: 1, gridRow: row }} title={person.name}>
+                <span className="act-name-full" aria-hidden="true">
+                  {person.name}
+                </span>
+                <span className="act-name-short" aria-hidden="true">
+                  {person.name.slice(0, 3)}
+                </span>
                 <span className="sr-only">
+                  {person.name}
                   {' '}
                   logged on {loggedCount} of the last {days.filter((d) => !d.isFuture).length} days.
                 </span>
@@ -113,9 +121,8 @@ export default function ActivityStrip({ people, entries, exercises, me }) {
           <i className="key-box" /> Not logged
         </span>
         <span>
-          <i className="key-box is-upcoming" /> Still to come
+          <i className="key-box is-upcoming" /> To come
         </span>
-        <span className="act-key-note">A set or a cardio session counts. Hover a box for details.</span>
       </p>
     </section>
   );

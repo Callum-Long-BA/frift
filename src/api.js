@@ -39,8 +39,8 @@ export const api = {
   people: () => request('people'),
   addPerson: (name) => request('people', { method: 'POST', body: { name } }),
   exercises: () => request('exercises'),
-  addExercise: (name, personId, equipmentChoice) =>
-    request('exercises', { method: 'POST', body: { name, personId, equipmentChoice } }),
+  addExercise: (name, personId, kind, equipmentChoice) =>
+    request('exercises', { method: 'POST', body: { name, personId, kind, equipmentChoice } }),
   entries: () => request('entries'),
   addEntry: (payload) => request('entries', { method: 'POST', body: payload }),
   deleteEntry: (id, personId) => request(`entries?id=${id}&personId=${personId}`, { method: 'DELETE' }),
