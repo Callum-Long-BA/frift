@@ -103,20 +103,60 @@ fieldset {
   border: 0;
 }
 
-/* ---------- Board ---------- */
+/* ---------- Board ----------
+   Four equal columns. "Weight training" takes the left three and "Cardio & calisthenics"
+   the far right one. Each zone is a subgrid, so its tiles line up with the board's columns
+   while the two zones stack their rows independently. */
 
 .board {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+  align-items: start;
   max-width: 1680px;
   margin: 0 auto;
   padding: 14px;
 }
 
+.zone {
+  display: grid;
+  grid-template-columns: subgrid;
+  row-gap: 14px;
+  align-content: start;
+}
+
+.zone-weights {
+  grid-column: 1 / 4;
+}
+
+.zone-cc {
+  grid-column: 4 / 5;
+}
+
+.zone-title {
+  grid-column: 1 / -1;
+  padding: 0 2px;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+/* The big tile takes two columns of the weight training zone. */
+.zone-weights > .control {
+  grid-column: span 2;
+}
+
 @media (max-width: 1180px) {
   .board {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .zone-weights,
+  .zone-cc,
+  .zone-weights > .control {
+    grid-column: 1 / -1;
   }
 }
 
@@ -125,6 +165,9 @@ fieldset {
     grid-template-columns: minmax(0, 1fr);
     gap: 10px;
     padding: 10px;
+  }
+  .zone {
+    row-gap: 10px;
   }
 }
 
@@ -175,14 +218,36 @@ fieldset {
   padding-right: 0.08em; /* italic overhang */
 }
 
-/* ---------- A1 control panel ---------- */
+/* ---------- Control tile (controls + activity) ---------- */
 
+/* Controls on the left, the activity grid on the right. Stacks on a phone. */
 .control {
-  gap: 16px;
+  display: grid;
+  grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr);
+  gap: 18px 24px;
   padding: 18px;
   background: var(--a1-bg);
   border-color: var(--a1-border);
   color: var(--a1-text);
+
+  /* The activity grid reads these, so match them to the darker tile. */
+  --text: var(--a1-text);
+  --text-2: var(--a1-muted);
+  --cell-empty: #2d333c;
+  --rule: #4a525d;
+}
+
+.control-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .control {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .control :focus-visible,
@@ -440,14 +505,25 @@ fieldset {
 
 /* ---------- Activity strip ---------- */
 
-/* One ordinary tile, the same size as a chart. Everything inside shrinks to the tile's
-   width rather than scrolling. */
+/* The right-hand side of the control tile. Everything inside shrinks to the space
+   available rather than scrolling. */
 .activity {
   container: activity / inline-size;
-  min-width: 0;
-  padding: 14px 14px 12px;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
+  min-width: 0;
+  padding-left: 24px;
+  border-left: 1px solid var(--a1-border);
   overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  .activity {
+    padding: 16px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--a1-border);
+  }
 }
 
 .activity h2 {
@@ -528,7 +604,7 @@ fieldset {
 }
 
 .act-cell {
-  height: 18px;
+  height: 20px;
   border-radius: 3px;
   background: var(--cell-empty);
 }
@@ -538,8 +614,10 @@ fieldset {
   border: 1px dashed var(--rule);
 }
 
-/* One outline around today's column, across every row. */
+/* One outline around today's column, across every row. It must stretch to fill the rows
+   it spans: with the grid's align-items: center it would shrink to a thin bar in the middle. */
 .act-today {
+  align-self: stretch;
   margin: -3px -2px;
   border: 2px solid var(--accent-line);
   border-radius: 5px;

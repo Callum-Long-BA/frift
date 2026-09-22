@@ -9,7 +9,8 @@ const MODE_OPTIONS = [
   ['best', 'Best set'],
 ];
 
-// Grid cell A1: identity, chart mode, and the key for line colours.
+// The big top-left tile: identity, chart mode, the key for line colours, and (as children)
+// the last-3-weeks activity grid beside them.
 export default function ControlPanel({
   people,
   me,
@@ -19,6 +20,7 @@ export default function ControlPanel({
   onModeChange,
   equalise,
   onEqualiseChange,
+  children,
 }) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
@@ -56,94 +58,98 @@ export default function ControlPanel({
   }
 
   return (
-    <section className="panel control" aria-label="Who you are and how charts are shown">
-      <h1 className="wordmark">
-        <em>FRIFT</em>
-      </h1>
+    <section className="panel control" aria-label="Who you are, how charts are shown, and recent activity">
+      <div className="control-main">
+        <h1 className="wordmark">
+          <em>FRIFT</em>
+        </h1>
 
-      <div className="control-group">
-        <label className="dark-field" htmlFor="who">
-          Who are you?
-        </label>
-        <select id="who" className="dark-select" value={adding ? NEW_PERSON : me?.id ?? ''} onChange={handleSelect}>
-          <option value="">Choose your name</option>
-          {people.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-          {people.length < MAX_PEOPLE && <option value={NEW_PERSON}>Add a new person…</option>}
-        </select>
-
-        {adding && (
-          <form className="add-person" onSubmit={handleAdd}>
-            <input
-              className="dark-input"
-              type="text"
-              maxLength={24}
-              placeholder="Your name"
-              aria-label="New person's name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoFocus
-            />
-            <button type="submit" className="primary small" disabled={busy}>
-              Add
-            </button>
-            <button
-              type="button"
-              className="ghost-dark small"
-              onClick={() => {
-                setAdding(false);
-                setError('');
-              }}
-            >
-              Cancel
-            </button>
-          </form>
-        )}
-        {error && (
-          <p className="dark-error" role="alert">
-            {error}
-          </p>
-        )}
-      </div>
-
-      <fieldset className="mode">
-        <legend>Charts show</legend>
-        {MODE_OPTIONS.map(([value, label]) => (
-          <label key={value}>
-            <input type="radio" name="mode" value={value} checked={mode === value} onChange={() => onModeChange(value)} />
-            {label}
+        <div className="control-group">
+          <label className="dark-field" htmlFor="who">
+            Who are you?
           </label>
-        ))}
-      </fieldset>
+          <select id="who" className="dark-select" value={adding ? NEW_PERSON : me?.id ?? ''} onChange={handleSelect}>
+            <option value="">Choose your name</option>
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+            {people.length < MAX_PEOPLE && <option value={NEW_PERSON}>Add a new person…</option>}
+          </select>
 
-      <div className="equalise">
-        <label>
-          <input type="checkbox" checked={equalise} onChange={(e) => onEqualiseChange(e.target.checked)} />
-          Equalise
-        </label>
-        <span className="info">
-          <button type="button" className="info-btn" aria-describedby="equalise-info">
-            What is this?
-          </button>
-          <span id="equalise-info" role="tooltip" className="info-tip">
-            Doubles dumbbell weights, so they compare fairly with barbell lifts.
+          {adding && (
+            <form className="add-person" onSubmit={handleAdd}>
+              <input
+                className="dark-input"
+                type="text"
+                maxLength={24}
+                placeholder="Your name"
+                aria-label="New person's name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoFocus
+              />
+              <button type="submit" className="primary small" disabled={busy}>
+                Add
+              </button>
+              <button
+                type="button"
+                className="ghost-dark small"
+                onClick={() => {
+                  setAdding(false);
+                  setError('');
+                }}
+              >
+                Cancel
+              </button>
+            </form>
+          )}
+          {error && (
+            <p className="dark-error" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+
+        <fieldset className="mode">
+          <legend>Charts show</legend>
+          {MODE_OPTIONS.map(([value, label]) => (
+            <label key={value}>
+              <input type="radio" name="mode" value={value} checked={mode === value} onChange={() => onModeChange(value)} />
+              {label}
+            </label>
+          ))}
+        </fieldset>
+
+        <div className="equalise">
+          <label>
+            <input type="checkbox" checked={equalise} onChange={(e) => onEqualiseChange(e.target.checked)} />
+            Equalise
+          </label>
+          <span className="info">
+            <button type="button" className="info-btn" aria-describedby="equalise-info">
+              What is this?
+            </button>
+            <span id="equalise-info" role="tooltip" className="info-tip">
+              Doubles dumbbell weights, so they compare fairly with barbell lifts.
+            </span>
           </span>
-        </span>
+        </div>
+
+        <ul className="legend" aria-label="Line colours">
+          {people.length === 0 && <li className="legend-empty">No one yet. Add yourself with the menu above.</li>}
+          {people.map((p) => (
+            <li key={p.id} className={me?.id === p.id ? 'is-me' : undefined}>
+              <span className="swatch" style={{ background: p.colour }} aria-hidden="true" />
+              {p.name}
+              {me?.id === p.id && <span className="you"> (you)</span>}
+            </li>
+          ))}
+        </ul>
       </div>
 
-      <ul className="legend" aria-label="Line colours">
-        {people.length === 0 && <li className="legend-empty">No one yet. Add yourself with the menu above.</li>}
-        {people.map((p) => (
-          <li key={p.id} className={me?.id === p.id ? 'is-me' : undefined}>
-            <span className="swatch" style={{ background: p.colour }} aria-hidden="true" />
-            {p.name}
-            {me?.id === p.id && <span className="you"> (you)</span>}
-          </li>
-        ))}
-      </ul>
+      {children}
     </section>
   );
 }

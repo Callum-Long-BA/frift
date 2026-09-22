@@ -10,8 +10,9 @@ const columnFor = (i) => 2 + i + Math.floor(i / 7);
 
 // One row per person, one box per day for the last few weeks. A box is filled in that
 // person's colour on days they logged anything. Today's column is outlined.
-// It fits in a single board tile: the boxes stretch to the tile's width, and in a narrow
-// tile the names shrink to their first few letters (see the container query in styles.css).
+// It sits inside the control tile, beside the controls: the boxes stretch to the space
+// available, and when that is narrow the names shrink to their first few letters (see the
+// container query in styles.css).
 export default function ActivityStrip({ people, entries, exercises, me }) {
   const today = todayString();
   const days = useMemo(() => weekGrid(today, ACTIVITY_WEEKS), [today]);
@@ -25,7 +26,7 @@ export default function ActivityStrip({ people, entries, exercises, me }) {
   const firstPersonRow = 3; // row 1 = week dates, row 2 = weekday letters
 
   return (
-    <section className="panel activity" aria-labelledby="activity-title">
+    <section className="activity" aria-labelledby="activity-title">
       <header>
         <h2 id="activity-title">Last {ACTIVITY_WEEKS} weeks</h2>
         <p className="chart-sub">Days with a set or cardio logged. Hover a box for details.</p>

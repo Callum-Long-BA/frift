@@ -101,6 +101,36 @@ export default function App() {
 
   const dialogExercise = exercises.find((e) => e.id === dialogExerciseId);
 
+  // Weighted exercises fill the left three columns; cardio and reps-only exercises
+  // stack in the far right column. Each keeps its own sort order.
+  const weightExercises = exercises.filter((e) => e.kind === 'strength');
+  const ccExercises = exercises.filter((e) => e.kind !== 'strength');
+
+  const renderChart = (exercise) => (
+    <ErrorBoundary
+      key={exercise.id}
+      resetKey={`${mode}-${equalise}-${entries.length}`}
+      fallback={(error) => (
+        <section className="panel">
+          <p className="chart-empty">
+            {exercise.name} could not be drawn: {String(error?.message ?? error)}
+          </p>
+        </section>
+      )}
+    >
+      <ExerciseChart
+        exercise={exercise}
+        people={themedPeople}
+        entries={entries}
+        me={me}
+        mode={mode}
+        equalise={equalise}
+        loading={status === 'loading'}
+        onAdd={() => setDialogExerciseId(exercise.id)}
+      />
+    </ErrorBoundary>
+  );
+
   return (
     <main className="board" aria-busy={status === 'loading'}>
       {status === 'error' && (
@@ -112,60 +142,50 @@ export default function App() {
         </div>
       )}
 
-      <ControlPanel
-        people={themedPeople}
-        me={me}
-        onSelect={selectPerson}
-        onAddPerson={addPerson}
-        mode={mode}
-        onModeChange={changeMode}
-        equalise={equalise}
-        onEqualiseChange={changeEqualise}
-      />
+      <div className="zone zone-weights" role="region" aria-labelledby="zone-weights-title">
+        <h2 id="zone-weights-title" className="zone-title">
+          Weight training
+        </h2>
 
-      {status === 'ready' && (
-        <ActivityStrip people={themedPeople} entries={entries} exercises={exercises} me={me} />
-      )}
-
-      {status === 'loading' && exercises.length === 0 && (
-        <section className="panel">
-          <p className="chart-empty">Loading…</p>
-        </section>
-      )}
-
-      {exercises.map((exercise) => (
-        <ErrorBoundary
-          key={exercise.id}
-          resetKey={`${mode}-${equalise}-${entries.length}`}
-          fallback={(error) => (
-            <section className="panel">
-              <p className="chart-empty">
-                {exercise.name} could not be drawn: {String(error?.message ?? error)}
-              </p>
-            </section>
-          )}
+        <ControlPanel
+          people={themedPeople}
+          me={me}
+          onSelect={selectPerson}
+          onAddPerson={addPerson}
+          mode={mode}
+          onModeChange={changeMode}
+          equalise={equalise}
+          onEqualiseChange={changeEqualise}
         >
-          <ExerciseChart
-            exercise={exercise}
-            people={themedPeople}
-            entries={entries}
-            me={me}
-            mode={mode}
-            equalise={equalise}
-            loading={status === 'loading'}
-            onAdd={() => setDialogExerciseId(exercise.id)}
-          />
-        </ErrorBoundary>
-      ))}
+          {status === 'ready' && (
+            <ActivityStrip people={themedPeople} entries={entries} exercises={exercises} me={me} />
+          )}
+        </ControlPanel>
 
-      {status === 'ready' && (
-        <AddExerciseTile
-          canAdd={Boolean(me)}
-          count={exercises.length}
-          atLimit={exercises.length >= MAX_EXERCISES}
-          onAdd={() => setAddingExercise(true)}
-        />
-      )}
+        {status === 'loading' && exercises.length === 0 && (
+          <section className="panel">
+            <p className="chart-empty">Loading…</p>
+          </section>
+        )}
+
+        {weightExercises.map(renderChart)}
+
+        {status === 'ready' && (
+          <AddExerciseTile
+            canAdd={Boolean(me)}
+            count={exercises.length}
+            atLimit={exercises.length >= MAX_EXERCISES}
+            onAdd={() => setAddingExercise(true)}
+          />
+        )}
+      </div>
+
+      <div className="zone zone-cc" role="region" aria-labelledby="zone-cc-title">
+        <h2 id="zone-cc-title" className="zone-title">
+          Cardio &amp; calisthenics
+        </h2>
+        {ccExercises.map(renderChart)}
+      </div>
 
       {dialogExercise && me && (
         <AddEntryDialog
