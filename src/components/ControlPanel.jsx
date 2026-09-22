@@ -9,9 +9,9 @@ const MODE_OPTIONS = [
   ['best', 'Best set'],
 ];
 
-// The big top-left tile: identity and chart mode on the left, and (as children) the
-// last-3-weeks activity grid beside them. The grid's name column doubles as the key for
-// line colours, so the tile stays a fixed height however many people there are.
+// The full-width top tile. Its first section is identity and chart mode; the other
+// sections (activity grid, activity log, Google Sheets) are passed in as children.
+// The activity grid's name column doubles as the key for line colours.
 export default function ControlPanel({
   people,
   me,

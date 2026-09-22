@@ -4,7 +4,7 @@ import { activityByPerson, dayLabel, todayString, weekGrid } from '../lib/metric
 
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-// Grid column for day number i (0-based across all weeks). Column 1 holds the names,
+// Grid column for display position i (0-based across all weeks). Column 1 holds the names,
 // and there is a narrow spacer column between weeks, so each week starts 1 column further along.
 const columnFor = (i) => 2 + i + Math.floor(i / 7);
 
@@ -12,14 +12,16 @@ const columnFor = (i) => 2 + i + Math.floor(i / 7);
 // person's colour on days they logged anything. Today's column is outlined. Each name has
 // a line sample in that person's colour, so this is also the key for the charts. The rows
 // shrink to fit the tile's fixed height, however many people there are.
-// It sits inside the control tile, beside the controls: the boxes stretch to the space
-// available, and when that is narrow the names shrink to their first few letters (see the
-// container query in styles.css).
+// Newest first: the current week comes first, and each week runs Sunday back to Monday.
+// It is one section of the top tile: the boxes stretch to the space available, and when
+// that is narrow the names shrink to their first few letters (see the container query
+// in styles.css).
 export default function ActivityStrip({ people, entries, exercises, me }) {
   const today = todayString();
-  const days = useMemo(() => weekGrid(today, ACTIVITY_WEEKS), [today]);
+  // weekGrid runs oldest to newest; the strip shows it the other way round.
+  const days = useMemo(() => weekGrid(today, ACTIVITY_WEEKS).reverse(), [today]);
   const activity = useMemo(
-    () => activityByPerson(entries, days[0].date, days[days.length - 1].date),
+    () => activityByPerson(entries, days[days.length - 1].date, days[0].date),
     [entries, days],
   );
   const exerciseName = useMemo(() => new Map(exercises.map((e) => [e.id, e.name])), [exercises]);
@@ -28,8 +30,10 @@ export default function ActivityStrip({ people, entries, exercises, me }) {
   const firstPersonRow = 3; // row 1 = week dates, row 2 = weekday letters
 
   return (
-    <section className="activity" aria-labelledby="activity-title">
-      <h2 id="activity-title">Last {ACTIVITY_WEEKS} weeks</h2>
+    <section className="control-section activity" aria-labelledby="activity-title">
+      <h2 id="activity-title" className="section-title">
+        Last {ACTIVITY_WEEKS} weeks
+      </h2>
 
       {people.length === 0 ? (
         <p className="chart-empty">No one yet. Add yourself with the menu on the left.</p>
@@ -42,7 +46,8 @@ export default function ActivityStrip({ people, entries, exercises, me }) {
         >
           {Array.from({ length: ACTIVITY_WEEKS }, (_, w) => (
             <span key={`w${w}`} className="act-week" style={{ gridColumn: `${columnFor(w * 7)} / span 7`, gridRow: 1 }}>
-              {dayLabel(days[w * 7].date).replace(/^\w+ /, '')}
+              {/* Each week is labelled by its Monday, which is now the last day of the block. */}
+              {dayLabel(days[w * 7 + 6].date).replace(/^\w+ /, '')}
             </span>
           ))}
 
