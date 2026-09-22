@@ -19,8 +19,6 @@ export default function ControlPanel({
   onModeChange,
   equalise,
   onEqualiseChange,
-  theme,
-  onThemeChange,
 }) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
@@ -126,7 +124,14 @@ export default function ControlPanel({
           <input type="checkbox" checked={equalise} onChange={(e) => onEqualiseChange(e.target.checked)} />
           Equalise
         </label>
-        <p>Doubles dumbbell weights, so they compare fairly with barbell lifts.</p>
+        <span className="info">
+          <button type="button" className="info-btn" aria-describedby="equalise-info">
+            What is this?
+          </button>
+          <span id="equalise-info" role="tooltip" className="info-tip">
+            Doubles dumbbell weights, so they compare fairly with barbell lifts.
+          </span>
+        </span>
       </div>
 
       <ul className="legend" aria-label="Line colours">
@@ -139,19 +144,6 @@ export default function ControlPanel({
           </li>
         ))}
       </ul>
-
-      <button
-        type="button"
-        role="switch"
-        aria-checked={theme === 'light'}
-        className="theme-switch"
-        onClick={() => onThemeChange(theme === 'light' ? 'dark' : 'light')}
-      >
-        <span className="switch-track" aria-hidden="true">
-          <span className="switch-thumb" />
-        </span>
-        Light mode
-      </button>
     </section>
   );
 }

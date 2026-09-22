@@ -17,7 +17,6 @@ import {
   formatDay,
   formatDayLong,
   pickTicks,
-  repsRadius,
   seriesKey,
 } from '../lib/metrics.js';
 import { CHART } from '../lib/theme.js';
@@ -46,7 +45,7 @@ export function ChartTooltip({ active, payload, label, mode, kind, equalise = fa
                 <span className="tip-name">{item.name}</span>
                 <span className="tip-value">
                   {formatAmount(item.value, mode, kind)}
-                  {mode === 'best' && sets.find((s) => s.counts) && ` × ${sets.find((s) => s.counts).reps}`}
+                  {mode === 'best' && kind === 'strength' && sets.find((s) => s.counts) && ` × ${sets.find((s) => s.counts).reps}`}
                 </span>
               </div>
               {sets.length > 0 && (
@@ -55,7 +54,7 @@ export function ChartTooltip({ active, payload, label, mode, kind, equalise = fa
                   {sets.map((s, i) => (
                     <span key={s.setNumber} className={s.counts ? 'tip-set is-counted' : 'tip-set'}>
                       {i > 0 && ', '}
-                      {s.weight}×{s.reps}
+                      {kind === 'reps' ? s.reps : `${s.weight}×${s.reps}`}
                       {s.equipment === 'dumbbell' && ' DB'}
                     </span>
                   ))}
@@ -83,33 +82,16 @@ export function ChartTooltip({ active, payload, label, mode, kind, equalise = fa
   );
 }
 
-// In best-set mode each dot is drawn by hand so its size can show the reps of that
-// day's best set. Recharts calls this with the point's position and its data row.
-function repsDot(person, opacity, active, ring) {
-  return function drawDot({ cx, cy, payload }) {
-    if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
-    const best = (payload?.detail?.[seriesKey(person.id)] ?? []).find((s) => s.counts);
-    if (!best) return null;
-    return (
-      <circle
-        key={`${person.id}-${payload.t}`}
-        cx={cx}
-        cy={cy}
-        r={repsRadius(best.reps) + (active ? 1.5 : 0)}
-        fill={person.colour}
-        fillOpacity={opacity}
-        stroke={active ? ring : 'none'}
-        strokeWidth={active ? 2 : 0}
-      />
-    );
-  };
-}
-
 function subtitleFor(exercise, mode, equalise) {
   if (exercise.kind === 'cardio') return mode === 'pct' ? 'Minutes, change since first log' : 'Minutes per day';
+  if (exercise.kind === 'reps') {
+    if (mode === 'pct') return 'Total reps, change since first log';
+    if (mode === 'best') return 'Best set of the day, reps';
+    return `Last ${COUNTED_SETS} sets, total reps`;
+  }
   let text;
   if (mode === 'pct') text = 'Total weight, change since first log';
-  else if (mode === 'best') text = 'Best set of the day, kg. Bigger dot = more reps';
+  else if (mode === 'best') text = 'Best set of the day, kg';
   else text = `Last ${COUNTED_SETS} sets, weight × reps, kg`;
   return equalise && exercise.equipment_choice ? `${text}. Dumbbells doubled.` : text;
 }
@@ -121,11 +103,10 @@ export default function ExerciseChart({
   me,
   mode,
   equalise = false,
-  theme = 'dark',
   loading,
   onAdd,
 }) {
-  const colours = CHART[theme] ?? CHART.dark;
+  const colours = CHART;
   const { rows, personIds } = useMemo(
     () => buildChartData(entries, exercise, mode, { equalise }),
     [entries, exercise, mode, equalise],
@@ -143,7 +124,6 @@ export default function ExerciseChart({
   const ticks = useMemo(() => pickTicks(rows), [rows]);
 
   const subtitle = subtitleFor(exercise, mode, equalise);
-  const sizeByReps = mode === 'best' && exercise.kind !== 'cardio';
 
   const emptyText = loading
     ? 'Loading…'
@@ -213,12 +193,8 @@ export default function ExerciseChart({
                     stroke={person.colour}
                     strokeWidth={isMe ? 4 : 2}
                     strokeOpacity={opacity}
-                    dot={
-                      sizeByReps
-                        ? repsDot(person, opacity, false, colours.ring)
-                        : { r: isMe ? 4 : 2.5, fill: person.colour, fillOpacity: opacity, strokeWidth: 0 }
-                    }
-                    activeDot={sizeByReps ? repsDot(person, 1, true, colours.ring) : { r: isMe ? 6 : 4 }}
+                    dot={{ r: isMe ? 4 : 2.5, fill: person.colour, fillOpacity: opacity, strokeWidth: 0 }}
+                    activeDot={{ r: isMe ? 6 : 4 }}
                     connectNulls
                     isAnimationActive={false}
                   />

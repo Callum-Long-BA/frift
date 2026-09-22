@@ -29,14 +29,14 @@ Live at **https://frift.callumlong.com**.
 
 - **Grid of charts.** The page is a grid: the top-left cell (A1) holds your controls, and every other cell is one exercise. On a wide screen it is four columns; it drops to two and then one on smaller screens.
 - **Who are you?** A dropdown in A1 picks who you are, or adds a new person. Choosing yourself thickens your line on every chart, dims everyone else's, and switches on the **+** button on each chart. Your choice is remembered in your browser. The legend below it runs the names along one line, wrapping only when it runs out of room.
-- **Logging sets.** Tap **+** on a chart to log sets for that exercise. Every set is logged separately (weight and reps). You can add several sets at once, pick the date, and delete your own entries to fix mistakes.
+- **Logging sets.** Tap **+** on a chart to log sets for that exercise. Every set is logged separately (weight and reps, or just reps for reps-only exercises). You can add several sets at once, pick the date, and delete your own entries to fix mistakes.
 - **Barbell or dumbbell.** Exercises that allow it (Bench press, Squat and Shoulder press to start with) ask whether each batch of sets was barbell or dumbbell.
 - **Three chart modes** (radio buttons in A1): total weight, % change, and best set. See [How the numbers work](#how-the-numbers-work).
-- **Equalise.** A checkbox in A1 that counts dumbbell sets at double weight so they can be compared with barbell lifts.
+- **Equalise.** A checkbox in A1 that counts dumbbell sets at double weight so they can be compared with barbell lifts. Hover or focus "What is this?" beside it for a one-line explanation.
 - **Hover details.** Hover a date on any weight × reps chart to see every person's value for that day and every set they did.
-- **Add exercise.** A tile after the last chart lets anyone add a new weight × reps exercise (up to 20 in total). New charts appear for everyone.
-- **Last 3 weeks strip.** Sits beside A1, above the exercise charts. One row per person, one box per day, for the current week plus the two before it (`ACTIVITY_WEEKS` in `src/lib/constants.js`). A filled box in that person's colour means they logged a set or cardio session that day; hovering it names what. Days later in the current week show as dashed, empty boxes. Today's column is outlined all the way down every row.
-- **Dark or light.** The app opens in dark mode. A switch at the bottom of A1 flips to light, and your choice is remembered in your browser. Each person's line colour has a lighter twin used only on the dark theme, so lines stay easy to read on a dark background; the database still stores one colour per person either way.
+- **Add exercise.** A tile after the last chart lets anyone add a new exercise (up to 20 in total), logged either as weight × reps or as **reps only** (for bodyweight moves like pull-ups). New charts appear for everyone.
+- **Last 3 weeks tile.** One ordinary tile next to A1, the same size as a chart, with nothing to scroll. One row per person, one box per day, for the current week plus the two before it (`ACTIVITY_WEEKS` in `src/lib/constants.js`). A filled box in that person's colour means they logged a set or cardio session that day; hovering it names what. Days later in the current week show as dashed, empty boxes. Today's column is outlined all the way down every row. The boxes stretch to fit the tile, and when the tile is narrow the names shorten to their first three letters (hover for the full name).
+- **Dark only.** The app is always dark. Each person's stored colour is shown as a lighter twin, so lines stay easy to read on a dark background; the database still stores the original colour.
 - **Cardio.** Logged as minutes, one entry per person per day.
 - **Shared passcode.** Everyone types one group passcode to get in.
 
@@ -52,7 +52,8 @@ Sets are stored one row per set. All the chart maths happens in the browser (`sr
 |---|---|
 | **Total weight** | For one person, one exercise and one day: the sum of weight × reps over the **last 3 sets** of that day. Only 3 sets count, so someone doing 5 sets does not look stronger than someone doing 3. |
 | **% change** | The total weight above, shown as % change from that person's **own first logged day** for that exercise. Every line starts at 0%. A person whose first value is zero is left out, because change from zero is undefined. |
-| **Best set** | The day's best set is the one with the highest weight × reps, looking at **all** sets that day (not only the last 3). The vertical axis is that set's **weight**. The **size of the dot** is its **reps** (bigger dot = more reps). |
+| **Best set** | The day's best set is the one with the highest weight × reps, looking at **all** sets that day (not only the last 3). The vertical axis is that set's **weight**; hover a point to see its reps. |
+| **Reps-only exercises** | Reps stand in for weight × reps: **total** is the reps over the last 3 sets, **% change** is change in that total, and **best set** is the most reps in one set. Equalise does not apply. |
 | **Cardio** (any mode) | Minutes per day. |
 
 Other rules:
@@ -151,7 +152,7 @@ Defined in `schema.sql`. The script is **idempotent**: safe to run again on a li
 |---|---|
 | `id` | Text slug, for example `bench_press`. Made from the name when an exercise is added. |
 | `name` | Unique ignoring case. 1 to 30 characters. |
-| `kind` | `strength` (weight × reps) or `cardio` (minutes). Exercises added in the app are always `strength`. |
+| `kind` | `strength` (weight × reps), `reps` (reps only, no weight) or `cardio` (minutes). Exercises added in the app are `strength` or `reps`. |
 | `equipment_choice` | `true` means each batch of sets is logged as barbell or dumbbell. |
 | `created_by` | The person who added it, or empty for the starting seven. |
 | `sort_order` | Charts are shown in this order, so new exercises appear at the end. |
@@ -166,7 +167,7 @@ Defined in `schema.sql`. The script is **idempotent**: safe to run again on a li
 | `exercise` | Must match `exercises.id`. |
 | `entry_date` | The day the set was done. |
 | `set_number` | 1, 2, 3 ... through the day, per person per exercise. |
-| `weight` | kg. For dumbbells, the weight of **one** dumbbell. Empty for cardio. |
+| `weight` | kg. For dumbbells, the weight of **one** dumbbell. Empty for cardio and reps-only exercises. |
 | `reps` | Whole number. Empty for cardio. |
 | `duration_min` | Minutes. Cardio only. |
 | `equipment` | `'barbell'` or `'dumbbell'` (lowercase, exactly), or empty. Empty counts as barbell. |
@@ -174,7 +175,7 @@ Defined in `schema.sql`. The script is **idempotent**: safe to run again on a li
 
 ### Rules enforced by the database
 
-- Strength rows need `weight` and `reps` and no `duration_min`; cardio rows need only `duration_min`.
+- Non-cardio rows need `reps` and no `duration_min` (the API also requires `weight` unless the exercise is reps only); cardio rows need only `duration_min`.
 - Weight cannot be negative, reps at least 1, duration above 0.
 - `equipment` can only be `barbell`, `dumbbell` or empty.
 - A person cannot have two entries with the same exercise, date and set number.
@@ -196,7 +197,7 @@ All endpoints live under `/api`, take and return JSON, and are never cached.
 | `GET /api/people` | All people: `id`, `name`, `colour`. |
 | `POST /api/people` | Add a person. Body: `{ "name": "Sam" }`. The colour is assigned automatically. Fails with `409` if the name is taken or 10 people already exist. |
 | `GET /api/exercises` | All exercises in chart order: `id`, `name`, `kind`, `equipment_choice`, `created_by`, `sort_order`. |
-| `POST /api/exercises` | Add an exercise. Body: `{ "name": "Romanian deadlift", "personId": 1, "equipmentChoice": true }`. Always weight × reps. Fails with `409` if the name exists or 20 exercises exist. |
+| `POST /api/exercises` | Add an exercise. Body: `{ "name": "Romanian deadlift", "personId": 1, "kind": "strength", "equipmentChoice": true }`. `kind` is `strength` (weight × reps, the default) or `reps` (reps only; `equipmentChoice` is ignored). Fails with `409` if the name exists or 20 exercises exist. |
 | `GET /api/entries` | Every logged set, oldest first: `id`, `person_id`, `exercise`, `date` (`YYYY-MM-DD`), `set_number`, `weight`, `reps`, `duration_min`, `equipment`. |
 | `POST /api/entries` | Log sets (see below). Returns the rows created. |
 | `DELETE /api/entries?id=12&personId=3` | Delete one entry. Only succeeds if it belongs to that person. |
@@ -253,7 +254,7 @@ frift/
 │   │   └── ErrorBoundary.jsx      stops one failure blanking the whole page
 │   └── lib/
 │       ├── constants.js       limits, modes, colour palette (shared with /api)
-│       ├── theme.js            light/dark colour lookups for the charts
+│       ├── theme.js            dark colour lookups for the charts
 │       ├── metrics.js         all chart calculations
 │       └── storage.js         safe localStorage helpers
 ├── test/                      unit tests (49)
@@ -280,7 +281,6 @@ frift/
   | `frift.me` | Who you picked in A1. |
   | `frift.mode` | `total`, `pct` or `best`. |
   | `frift.equalise` | Whether Equalise is ticked. |
-  | `frift.theme` | `dark` or `light`. |
 
   None of this is shared between people or devices.
 - **Dialogs** use the browser's built-in `<dialog>` element, so Escape closes them and focus is handled for you.
@@ -340,7 +340,7 @@ Plain `vite` (`npm run dev:ui`) only serves the front end; `/api` needs the Verc
 npm test           # unit tests, no database needed
 ```
 
-The tests cover the chart maths (last 3 sets, best set, equalise, % change, tooltip data, dot sizing), the passcode check, and input validation. They do not draw real charts or talk to a real database.
+The tests cover the chart maths (last 3 sets, best set, equalise, % change, reps-only exercises, tooltip data), the passcode check, and input validation. They do not draw real charts or talk to a real database.
 
 ---
 

@@ -78,6 +78,7 @@ const exercises = [
   { id: 'squat', kind: 'strength', equipment_choice: true },
   { id: 'romanian_deadlift', kind: 'strength', equipment_choice: false },
   { id: 'cardio', kind: 'cardio', equipment_choice: false },
+  { id: 'pull_ups', kind: 'reps', equipment_choice: false },
 ];
 const base = { personId: 1, exercise: 'bench_press', date: '2026-09-19' };
 
@@ -154,4 +155,19 @@ test('exercises without the choice ignore any equipment sent and store none', ()
 test('cardio never carries equipment', () => {
   const e = parseNewEntry({ personId: 1, exercise: 'cardio', date: '2026-09-19', durationMin: 20, equipment: 'dumbbell' }, exercises, now);
   assert.equal(e.equipment, undefined);
+});
+
+const pullups = { personId: 1, exercise: 'pull_ups', date: '2026-09-19' };
+
+test('reps-only exercises take reps alone and store no weight or equipment', () => {
+  const e = parseNewEntry({ ...pullups, equipment: 'dumbbell', sets: [{ reps: '12' }, { reps: 8, weight: 20 }] }, exercises, now);
+  assert.equal(e.kind, 'reps');
+  assert.equal(e.equipment, null);
+  assert.deepEqual(e.sets, [{ weight: null, reps: 12 }, { weight: null, reps: 8 }]);
+});
+
+test('reps-only exercises still reject bad reps', () => {
+  for (const r of ['', 0, 7.5, 201, 'abc']) {
+    assert.throws(() => parseNewEntry({ ...pullups, sets: [{ reps: r }] }, exercises, now), HttpError);
+  }
 });

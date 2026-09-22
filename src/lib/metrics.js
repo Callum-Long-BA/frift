@@ -81,9 +81,10 @@ const factorFor = (row, equalise) => (equalise && row.equipment === 'dumbbell' ?
 //   value = sum of weight x reps over the LAST 3 sets (by set number) of the day.
 // mode 'best':
 //   the best set is the one with the highest weight x reps that day, from ALL sets.
-//   value = the WEIGHT of that set (doubled for equalised dumbbells). Its reps are
-//   shown by the chart as the size of the dot.
-
+//   value = the WEIGHT of that set (doubled for equalised dumbbells).
+//
+// Reps-only exercises (kind 'reps') have no weight, so reps stand in for weight x reps:
+// 'total' sums the reps of the last 3 sets and 'best' is the most reps in one set.
 // Cardio is minutes in either mode and has no sets.
 //
 // `sets` lists every set that day, with `counts: true` on the sets that
@@ -116,7 +117,8 @@ export function dailySummaries(entries, exercise, mode = 'total', { equalise = f
         factor: factorFor(r, equalise),
         counts: false,
       }));
-      const volume = (s) => s.weight * s.factor * s.reps;
+      const repsOnly = exercise.kind === 'reps';
+      const volume = (s) => (repsOnly ? s.reps : s.weight * s.factor * s.reps);
 
       if (mode === 'best') {
         let bestIndex = 0;
@@ -130,7 +132,7 @@ export function dailySummaries(entries, exercise, mode = 'total', { equalise = f
         });
         const best = sets[bestIndex];
         best.counts = true;
-        value = best.weight * best.factor;
+        value = repsOnly ? best.reps : best.weight * best.factor;
       } else {
         const counted = sets.slice(-COUNTED_SETS);
         counted.forEach((s) => {
@@ -186,12 +188,6 @@ export function buildChartData(entries, exercise, mode, { equalise = false } = {
   return { rows, personIds: [...perPerson.keys()] };
 }
 
-// Dot radius for a best set: the dot's AREA grows with reps, clamped so 1 rep is
-// still visible and 30 reps does not swamp the chart.
-export function repsRadius(reps) {
-  return Math.max(3, Math.min(12, 2.5 * Math.sqrt(reps)));
-}
-
 // Up to `max` evenly spread x-axis ticks, always on real logged dates.
 export function pickTicks(rows, max = 4) {
   if (rows.length === 0) return undefined;
@@ -218,5 +214,6 @@ export function formatDayLong(t) {
 
 export function formatAmount(value, mode, kind) {
   if (mode === 'pct') return `${value > 0 ? '+' : ''}${value}%`;
-  return `${round1(value).toLocaleString('en-GB')} ${kind === 'cardio' ? 'min' : 'kg'}`;
+  const unit = kind === 'cardio' ? 'min' : kind === 'reps' ? 'reps' : 'kg';
+  return `${round1(value).toLocaleString('en-GB')} ${unit}`;
 }

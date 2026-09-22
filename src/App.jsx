@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, AuthError, clearPasscode, getPasscode } from './api.js';
 import { MAX_EXERCISES, MODES } from './lib/constants.js';
 import { readStored, writeStored } from './lib/storage.js';
-import { THEME_KEY, colourFor } from './lib/theme.js';
+import { colourFor } from './lib/theme.js';
 import ControlPanel from './components/ControlPanel.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import ExerciseChart from './components/ExerciseChart.jsx';
@@ -29,23 +29,12 @@ export default function App() {
     return MODES.includes(stored) ? stored : 'total';
   });
   const [equalise, setEqualise] = useState(() => readStored(EQUALISE_KEY) === '1');
-  const [theme, setTheme] = useState(() => (readStored(THEME_KEY) === 'light' ? 'light' : 'dark'));
   const [dialogExerciseId, setDialogExerciseId] = useState(null);
   const [addingExercise, setAddingExercise] = useState(false);
 
-  // People are stored with their light-theme colour; show the twin that suits the current theme.
-  const themedPeople = useMemo(
-    () => people.map((p) => ({ ...p, colour: colourFor(p.colour, theme) })),
-    [people, theme],
-  );
+  // People are stored with their original colour; show the lighter twin that suits the dark page.
+  const themedPeople = useMemo(() => people.map((p) => ({ ...p, colour: colourFor(p.colour) })), [people]);
   const me = themedPeople.find((p) => p.id === meId) ?? null;
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    document
-      .querySelector('meta[name="theme-color"]')
-      ?.setAttribute('content', theme === 'dark' ? '#0D0F12' : '#E7E9EB');
-  }, [theme]);
 
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setStatus('loading');
@@ -103,11 +92,6 @@ export default function App() {
     writeStored(MODE_KEY, next);
   }
 
-  function changeTheme(next) {
-    setTheme(next);
-    writeStored(THEME_KEY, next);
-  }
-
   function changeEqualise(next) {
     setEqualise(next);
     writeStored(EQUALISE_KEY, next ? '1' : '0');
@@ -137,8 +121,6 @@ export default function App() {
         onModeChange={changeMode}
         equalise={equalise}
         onEqualiseChange={changeEqualise}
-        theme={theme}
-        onThemeChange={changeTheme}
       />
 
       {status === 'ready' && (
@@ -154,7 +136,7 @@ export default function App() {
       {exercises.map((exercise) => (
         <ErrorBoundary
           key={exercise.id}
-          resetKey={`${mode}-${equalise}-${theme}-${entries.length}`}
+          resetKey={`${mode}-${equalise}-${entries.length}`}
           fallback={(error) => (
             <section className="panel">
               <p className="chart-empty">
@@ -170,7 +152,6 @@ export default function App() {
             me={me}
             mode={mode}
             equalise={equalise}
-            theme={theme}
             loading={status === 'loading'}
             onAdd={() => setDialogExerciseId(exercise.id)}
           />

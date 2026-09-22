@@ -15,7 +15,7 @@ create unique index if not exists people_name_unique on people (lower(name));
 create table if not exists exercises (
   id         text primary key,                      -- slug, e.g. 'bench_press'
   name       text not null,
-  kind       text not null default 'strength' check (kind in ('strength', 'cardio')),
+  kind       text not null default 'strength' check (kind in ('strength', 'reps', 'cardio')),  -- reps = reps only, no weight
   equipment_choice boolean not null default false,  -- true = log each set as barbell or dumbbell
   created_by int references people(id) on delete set null,
   sort_order serial,                                -- charts appear in this order
@@ -26,6 +26,10 @@ create unique index if not exists exercises_name_unique on exercises (lower(name
 
 -- Databases created before barbell/dumbbell support need the column added.
 alter table exercises add column if not exists equipment_choice boolean not null default false;
+
+-- Databases created before reps-only exercises need the wider kind check.
+alter table exercises drop constraint if exists exercises_kind_check;
+alter table exercises add constraint exercises_kind_check check (kind in ('strength', 'reps', 'cardio'));
 
 -- The original seven. Do not add sort_order here: the sequence numbers them in order.
 insert into exercises (id, name, kind, equipment_choice) values
@@ -42,6 +46,7 @@ on conflict do nothing;
 update exercises set equipment_choice = true where id in ('bench_press', 'squat', 'shoulder_press');
 
 -- One row per set. Cardio is one row per day with only duration_min filled in.
+-- Reps-only exercises leave weight null.
 create table if not exists entries (
   id           serial primary key,
   person_id    int not null references people(id) on delete cascade,
@@ -57,11 +62,19 @@ create table if not exists entries (
   constraint entries_shape check (
     (exercise = 'cardio' and duration_min is not null and weight is null and reps is null)
     or
-    (exercise <> 'cardio' and weight is not null and reps is not null and duration_min is null)
+    (exercise <> 'cardio' and reps is not null and duration_min is null)
   ),
   constraint entries_positive check (
     coalesce(weight, 0) >= 0 and coalesce(reps, 1) >= 1 and coalesce(duration_min, 1) > 0
   )
+);
+
+-- Databases created before reps-only exercises required a weight on every set.
+alter table entries drop constraint if exists entries_shape;
+alter table entries add constraint entries_shape check (
+  (exercise = 'cardio' and duration_min is not null and weight is null and reps is null)
+  or
+  (exercise <> 'cardio' and reps is not null and duration_min is null)
 );
 
 -- Databases created before barbell/dumbbell support need the column added.

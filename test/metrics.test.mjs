@@ -5,8 +5,8 @@ import {
   dailySummaries,
   nextSetNumber,
   pickTicks,
-  repsRadius,
   seriesKey,
+  formatAmount,
   activityByPerson,
   dayLabel,
   weekGrid,
@@ -103,7 +103,7 @@ test('best set is chosen by weight x reps, so 60x8 beats 100x3 and y shows 60', 
   const entries = [set(1, '2026-09-01', 1, 100, 3), set(1, '2026-09-01', 2, 60, 8)];
   assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 60);
   const sets = buildChartData(entries, bench, 'best').rows[0].detail[seriesKey(1)];
-  assert.equal(sets.find((s) => s.counts).reps, 8); // the dot is sized by these reps
+  assert.equal(sets.find((s) => s.counts).reps, 8); // shown in the hover card
 });
 
 test('best mode charts one point per day using the best set', () => {
@@ -288,15 +288,34 @@ test('equalise never changes cardio', () => {
   assert.equal(rows[0][seriesKey(1)], 30);
 });
 
-test('dot radius grows with reps, never vanishes and never swamps the chart', () => {
-  assert.ok(repsRadius(1) >= 3);
-  assert.ok(repsRadius(5) < repsRadius(10));
-  assert.ok(repsRadius(10) < repsRadius(20));
-  assert.equal(repsRadius(500), 12);
-  assert.ok(repsRadius(0) >= 3);
+// ---------- reps-only exercises ----------
+
+const pullups = { id: 'pull_ups', name: 'Pull ups', kind: 'reps' };
+const repsSet = (person_id, date, set_number, reps) => set(person_id, date, set_number, null, reps, 'pull_ups');
+
+test('reps only, total: sums the reps of the last 3 sets', () => {
+  const entries = [1, 2, 3, 4].map((n, i) => repsSet(1, '2026-09-01', n, [20, 10, 8, 6][i]));
+  assert.equal(value(entries, pullups, 1, '2026-09-01', 'total'), 10 + 8 + 6);
 });
 
-test('best mode: one dot per person per day, with that day\'s best reps available for sizing', () => {
+test('reps only, best: the most reps in one set, from all sets', () => {
+  const entries = [1, 2, 3, 4].map((n, i) => repsSet(1, '2026-09-01', n, [20, 10, 8, 6][i]));
+  assert.equal(value(entries, pullups, 1, '2026-09-01', 'best'), 20);
+});
+
+test('reps only, % change works from total reps, and equalise does nothing', () => {
+  const entries = [repsSet(1, '2026-09-01', 1, 10), repsSet(1, '2026-09-03', 1, 15)];
+  const { rows } = buildChartData(entries, pullups, 'pct', { equalise: true });
+  assert.deepEqual(rows.map((r) => r[seriesKey(1)]), [0, 50]);
+});
+
+test('amounts are labelled in reps for reps-only exercises', () => {
+  assert.equal(formatAmount(24, 'total', 'reps'), '24 reps');
+  assert.equal(formatAmount(60, 'best', 'strength'), '60 kg');
+  assert.equal(formatAmount(30, 'total', 'cardio'), '30 min');
+});
+
+test('best mode: one point per person per day, with that day\'s best reps kept for the hover card', () => {
   const entries = [
     set(1, '2026-09-01', 1, 60, 8), set(1, '2026-09-01', 2, 70, 5), // 480 vs 350 -> 60x8
     set(2, '2026-09-01', 1, 40, 12),

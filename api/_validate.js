@@ -61,6 +61,7 @@ export function parseDate(value, now = new Date()) {
 // `exercises` is the list from the database: [{ id, kind, equipment_choice }].
 // Returns a normalised entry:
 //   { kind: 'strength', personId, exercise, date, equipment, sets: [{ weight, reps }] }
+//   { kind: 'reps',     personId, exercise, date, equipment: null, sets: [{ weight: null, reps }] }
 //   { kind: 'cardio',   personId, exercise, date, durationMin }
 export function parseNewEntry(body, exercises, now = new Date()) {
   const personId = parseId(body?.personId, 'Person');
@@ -80,9 +81,16 @@ export function parseNewEntry(body, exercises, now = new Date()) {
   if (!Array.isArray(rawSets) || rawSets.length < 1 || rawSets.length > MAX_SETS_PER_ENTRY) {
     throw new HttpError(400, `Log between 1 and ${MAX_SETS_PER_ENTRY} sets at a time.`);
   }
+  const repsOnly = exercise.kind === 'reps';
   const sets = rawSets.map((s, i) => {
-    const weight = toNumber(s?.weight);
     const reps = toNumber(s?.reps);
+    if (repsOnly) {
+      if (!Number.isInteger(reps) || reps < 1 || reps > 200) {
+        throw new HttpError(400, `Set ${i + 1}: reps must be a whole number from 1 to 200.`);
+      }
+      return { weight: null, reps };
+    }
+    const weight = toNumber(s?.weight);
     if (!Number.isFinite(weight) || weight < 0 || weight > 1000) {
       throw new HttpError(400, `Set ${i + 1}: weight must be between 0 and 1000 kg.`);
     }
@@ -94,10 +102,10 @@ export function parseNewEntry(body, exercises, now = new Date()) {
 
   // Exercises that allow a choice need to say barbell or dumbbell. Others store nothing.
   let equipment = null;
-  if (exercise.equipment_choice) {
+  if (exercise.equipment_choice && !repsOnly) {
     if (!EQUIPMENT.includes(body?.equipment)) throw new HttpError(400, 'Choose barbell or dumbbell.');
     equipment = body.equipment;
   }
 
-  return { kind: 'strength', personId, exercise: exercise.id, date, equipment, sets };
+  return { kind: repsOnly ? 'reps' : 'strength', personId, exercise: exercise.id, date, equipment, sets };
 }

@@ -9,18 +9,14 @@ test('the API still stores the light colours, so existing rows keep matching', (
   assert.equal(PERSON_COLOURS[0], '#E5322D');
 });
 
-test('light theme shows the stored colour unchanged', () => {
-  for (const c of PERSON_COLOURS) assert.equal(colourFor(c, 'light'), c);
-});
-
-test('dark theme swaps each stored colour for its lighter twin, ignoring case', () => {
-  assert.equal(colourFor('#E5322D', 'dark'), '#FF5C57');
-  assert.equal(colourFor('#e5322d', 'dark'), '#FF5C57');
-  assert.equal(colourFor('#14161A', 'dark'), '#F3F4F6'); // the old black must not vanish on a dark page
+test('each stored colour is shown as its lighter twin, ignoring case', () => {
+  assert.equal(colourFor('#E5322D'), '#FF5C57');
+  assert.equal(colourFor('#e5322d'), '#FF5C57');
+  assert.equal(colourFor('#14161A'), '#F3F4F6'); // the old black must not vanish on a dark page
 });
 
 test('an unknown colour passes through untouched', () => {
-  assert.equal(colourFor('#123456', 'dark'), '#123456');
+  assert.equal(colourFor('#123456'), '#123456');
 });
 
 test('every dark twin is distinct, and bright enough to read on the dark panel', () => {
@@ -37,6 +33,6 @@ test('every dark twin is distinct, and bright enough to read on the dark panel',
   }
 });
 
-test('both themes define every chart colour', () => {
-  assert.deepEqual(Object.keys(CHART.dark).sort(), Object.keys(CHART.light).sort());
+test('every chart colour is defined', () => {
+  for (const key of ['grid', 'axis', 'tick', 'cursor', 'zero']) assert.match(CHART[key], /^#[0-9A-F]{6}$/i);
 });
