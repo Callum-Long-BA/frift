@@ -57,33 +57,42 @@ function prMeasure(entry, kind) {
 // Older sets with no equipment recorded count as barbell, as they do on the charts.
 const prTrack = (entry, kind) => (kind === 'strength' ? entry.equipment ?? 'barbell' : '');
 
-// One session: everything one person logged on one day, as { exerciseIds, prs }, with
-// exercises in the order they were logged. `prs` lists the exercises where that session
+// One session: everything one person logged on one day, as { exerciseIds, prs, prEntryIds },
+// with exercises in the order they were logged. `prs` lists the exercises where that session
 // beat every earlier session by that person (see prMeasure). A first ever session of an
-// exercise sets a baseline, not a record. Used by the activity log and the Discord post.
+// exercise sets a baseline, not a record. `prEntryIds` holds the set that made each record:
+// the first set (by set number) to reach the session's best. Used by the activity log and
+// the Discord post.
 export function sessionSummary(entries, exercises, personId, date) {
   const kindOf = new Map(exercises.map((e) => [e.id, e.kind]));
   const rows = entries.filter((e) => e.person_id === personId && e.date === date).sort((a, b) => a.id - b.id);
   const exerciseIds = [...new Set(rows.map((r) => r.exercise))];
+  const prEntryIds = new Set();
   const prs = exerciseIds.filter((exerciseId) => {
     const kind = kindOf.get(exerciseId) ?? 'strength';
-    const best = new Map(); // track -> this session's best
-    for (const r of rows) {
+    const best = new Map(); // track -> the set with this session's best
+    for (const r of [...rows].sort((a, b) => a.set_number - b.set_number)) {
       if (r.exercise !== exerciseId) continue;
       const track = prTrack(r, kind);
-      best.set(track, Math.max(best.get(track) ?? -Infinity, prMeasure(r, kind)));
+      const held = best.get(track);
+      if (!held || prMeasure(r, kind) > prMeasure(held, kind)) best.set(track, r);
     }
-    return [...best].some(([track, top]) => {
+    let isPr = false;
+    for (const [track, top] of best) {
       let before = -Infinity;
       for (const e of entries) {
         if (e.person_id === personId && e.exercise === exerciseId && e.date < date && prTrack(e, kind) === track) {
           before = Math.max(before, prMeasure(e, kind));
         }
       }
-      return before > -Infinity && top > before;
-    });
+      if (before > -Infinity && prMeasure(top, kind) > before) {
+        isPr = true;
+        prEntryIds.add(top.id);
+      }
+    }
+    return isPr;
   });
-  return { exerciseIds, prs };
+  return { exerciseIds, prs, prEntryIds };
 }
 
 // The most recent sessions (one person, one day), newest logged first, for the activity log.

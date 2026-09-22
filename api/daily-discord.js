@@ -58,7 +58,7 @@ export default route(
 
       const sql = db();
       const [people, exercises, entries] = await Promise.all([
-        sql`select id, name, colour from people`,
+        sql`select id, name from people`,
         sql`select id, name, kind from exercises`,
         sql`select id, person_id, exercise, to_char(entry_date, 'YYYY-MM-DD') as date, set_number,
                    weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment

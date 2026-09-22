@@ -39,7 +39,7 @@ Live at **https://frift.callumlong.com**.
 - **Last 3 weeks.** The second section of A1, with nothing to scroll. One row per person, one box per day, for the current week plus the two before it (`ACTIVITY_WEEKS` in `src/lib/constants.js`). Newest first: the current week comes first, each week runs Sunday back to Monday, and each week is labelled with its Monday's date. A filled box in that person's colour means they logged a set or cardio session that day; hovering it names what. Days later in the current week show as dashed, empty boxes. Today's column is outlined all the way down every row. The rows shrink evenly when there are too many people to fit at full size, the boxes stretch to fit the width, and when it is narrow the names shorten to their first three letters (hover for the full name).
 - **Activity log.** The third section of A1: the last 5 sessions logged (one person, one day), newest first, with the exercises done. The line below says how many PRs that session set, with a 🏆 and the exercise names. A PR means the session's best beat every earlier session of that exercise by that person: the heaviest weight for weight × reps (barbell and dumbbell counted separately), the most reps in a set for reps-only, and the longest time for cardio. The first ever session of an exercise sets a baseline rather than a PR.
 - **Google Sheets upload.** The fourth section of A1 is a placeholder for instructions on logging sets automatically from a Google Sheet, coming in a later version.
-- **Daily Discord post.** At 8pm UK time, FRIFT posts to the group's Discord channel: one message per person who logged anything that day, listing each exercise with its sets and marking PRs with 🏆. See [Daily Discord post](#daily-discord-post).
+- **Daily Discord post.** At 8pm UK time, FRIFT posts to the group's Discord channel: one message per person who logged anything that day, listing their exercises and showing the sets of any PR with a 🏆. See [Daily Discord post](#daily-discord-post).
 - **Dark only.** The app is always dark. Each person's stored colour is shown as a lighter twin, so lines stay easy to read on a dark background; the database still stores the original colour.
 - **Cardio.** Logged as minutes, one entry per person per day.
 - **Shared passcode.** Everyone types one group passcode to get in.
@@ -422,14 +422,11 @@ You should see two rows: `entries / equipment` and `exercises / equipment_choice
 
 ## Daily Discord post
 
-At **8pm UK time** every day, FRIFT posts to the group's Discord channel: **one message per person** who logged anything that day, in the order people joined. Each message is a card in that person's FRIFT colour, with one line per exercise, for example:
+At **8pm UK time** every day, FRIFT posts to the group's Discord channel: **one message per person** who logged anything that day, in the order people joined. Each is one line listing their exercises in the order they logged them, for example:
 
-> **Sam · Tue 22 Sep**
-> **Bench press** · 60 kg × 8, 62.5 kg × 6 · 🏆 PR
-> **Pull ups** · 12, 10, 8 reps
-> *🏆 1 PR today*
+> Sam worked out today ✅ -> Bench press, Squat, Shoulder press [PR! 34kg x 10, 40kg x 10 🏆, 40kg x 10], Seated row.
 
-PRs use the same rule as the activity log. `DB` marks dumbbell sets. If no one logged anything, nothing is posted. Entries count toward the day they were logged **for**, so a set added after 8pm (or for an earlier date) is not posted.
+An exercise where they hit a PR is followed by all its sets in brackets, with 🏆 on the set that made the record (the first to reach the day's best). PRs use the same rule as the activity log. Reps-only sets show as `12 reps`, cardio as `30 min`, and `DB` marks dumbbell sets. If no one logged anything, nothing is posted. Entries count toward the day they were logged **for**, so a set added after 8pm (or for an earlier date) is not posted.
 
 **Timing.** Vercel schedules are in UTC, so `vercel.json` calls the endpoint at both 19:00 and 20:00 UTC, and only the call that falls in the 8pm hour in London posts. That keeps it at 8pm through summer and winter time. On Vercel's free Hobby plan a scheduled call can arrive any time within its hour, so the post can land between 8:00 and 8:59pm. Each posted day is recorded in the `discord_posts` table, so a repeated call cannot post twice.
 

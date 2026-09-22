@@ -46,29 +46,45 @@ test('one message per person who logged today, in the order people joined', () =
   assert.deepEqual(messages.map((m) => m.personId), [1, 2]);
 });
 
-test('each message lists every exercise with its sets in order, and marks PRs', () => {
+test('one line: exercises in the order logged; a PR exercise lists its sets with the record set marked', () => {
   const [sam, jo] = buildDailyMessages({ people, exercises, entries, date: today });
-  const embed = sam.payload.embeds[0];
-  assert.match(embed.title, /^Sam · Tue 22 Sep/);
+  assert.equal(sam.payload.content, 'Sam worked out today ✅ -> Bench press [PR! 60kg x 8, 62.5kg x 6 🏆], Pull ups.');
+  assert.equal(jo.payload.content, 'Jo worked out today ✅ -> Cardio.');
+});
+
+test('only the first set to reach the record gets the trophy, as in "34kg x 10, 40kg x 10 🏆, 40kg x 10"', () => {
+  const shoulder = { id: 'shoulder_press', name: 'Shoulder press', kind: 'strength' };
+  const rows = [
+    row(1, '2026-09-15', 'shoulder_press', 1, { weight: 35, reps: 10 }),
+    row(1, today, 'shoulder_press', 1, { weight: 34, reps: 10 }),
+    row(1, today, 'shoulder_press', 2, { weight: 40, reps: 10 }),
+    row(1, today, 'shoulder_press', 3, { weight: 40, reps: 10 }),
+  ];
+  const [sam] = buildDailyMessages({ people, exercises: [...exercises, shoulder], entries: rows, date: today });
+  assert.equal(sam.payload.content, 'Sam worked out today ✅ -> Shoulder press [PR! 34kg x 10, 40kg x 10 🏆, 40kg x 10].');
+});
+
+test('reps-only and cardio PRs show reps and minutes; dumbbell sets are marked DB', () => {
+  const rows = [
+    row(1, '2026-09-15', 'pull_ups', 1, { reps: 10 }),
+    row(1, today, 'pull_ups', 1, { reps: 12 }),
+    row(1, today, 'pull_ups', 2, { reps: 9 }),
+    row(1, '2026-09-15', 'cardio', 1, { duration_min: 20 }),
+    row(1, today, 'cardio', 1, { duration_min: 45 }),
+    row(1, '2026-09-15', 'bench_press', 1, { weight: 20, reps: 10, equipment: 'dumbbell' }),
+    row(1, today, 'bench_press', 1, { weight: 25, reps: 10, equipment: 'dumbbell' }),
+  ];
+  const [sam] = buildDailyMessages({ people, exercises, entries: rows, date: today });
   assert.equal(
-    embed.description,
-    '**Bench press** · 60 kg × 8, 62.5 kg × 6 · 🏆 PR\n**Pull ups** · 12 reps',
+    sam.payload.content,
+    'Sam worked out today ✅ -> Pull ups [PR! 12 reps 🏆, 9 reps], Cardio [PR! 45 min 🏆], Bench press [PR! 25kg x 10 DB 🏆].',
   );
-  assert.equal(embed.footer.text, '🏆 1 PR today');
-  assert.equal(embed.color, 0xff5c57); // Sam's colour as shown on the dark site
-  assert.equal(jo.payload.embeds[0].description, '**Cardio** · 30 min');
-  assert.equal(jo.payload.embeds[0].footer.text, '1 exercise logged');
 });
 
-test('messages never ping anyone', () => {
-  const [sam] = buildDailyMessages({ people, exercises, entries, date: today });
+test('messages never ping anyone, and names cannot add formatting', () => {
+  const [sam] = buildDailyMessages({ people: [{ id: 1, name: '*Sam*', colour: '#E5322D' }], exercises, entries, date: today });
   assert.deepEqual(sam.payload.allowed_mentions, { parse: [] });
-});
-
-test('dumbbell sets are marked DB', () => {
-  const db = [row(1, today, 'bench_press', 1, { weight: 25, reps: 10, equipment: 'dumbbell' })];
-  const [sam] = buildDailyMessages({ people, exercises, entries: db, date: today });
-  assert.equal(sam.payload.embeds[0].description, '**Bench press** · 25 kg × 10 DB');
+  assert.match(sam.payload.content, /^\\\*Sam\\\* worked out today/);
 });
 
 test('no one logged anything: no messages', () => {
