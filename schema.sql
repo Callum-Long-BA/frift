@@ -98,3 +98,10 @@ create unique index if not exists entries_one_cardio_per_day
   on entries (person_id, entry_date) where exercise = 'cardio';
 
 create index if not exists entries_by_exercise_date on entries (exercise, entry_date);
+
+-- Days already posted to Discord by the 8pm job (api/daily-discord.js), so a repeated
+-- scheduled call cannot post the same day twice.
+create table if not exists discord_posts (
+  day     date primary key,
+  sent_at timestamptz not null default now()
+);
