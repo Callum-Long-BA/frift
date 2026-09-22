@@ -27,15 +27,15 @@ Live at **https://frift.callumlong.com**.
 
 ## What it does
 
-- **Grid of charts.** On a wide screen the page is four columns. The left three are **Weight training** (weight × reps exercises) and the far right column is **Cardio & calisthenics** (cardio and reps-only exercises). New exercises go to the matching section automatically. The top-left tile (A1) is two columns wide and holds your controls and the activity grid. On smaller screens the board drops to two columns and then one, with Weight training first.
-- **Who are you?** A dropdown in A1 picks who you are, or adds a new person. Choosing yourself thickens your line on every chart, dims everyone else's, and switches on the **+** button on each chart. Your choice is remembered in your browser. The legend below it runs the names along one line, wrapping only when it runs out of room.
+- **Grid of charts.** Every tile is the same fixed height (340px), however many people there are. On a wide screen the page is four columns. The left three are **Weight training** (weight × reps exercises) and the far right column is **Cardio & calisthenics** (cardio and reps-only exercises). New exercises go to the matching section automatically. The top-left tile (A1) is two columns wide and holds your controls and the activity grid. On smaller screens the board drops to two columns and then one, with Weight training first.
+- **Who are you?** A dropdown in A1 picks who you are, or adds a new person. Choosing yourself thickens your line on every chart, dims everyone else's, and switches on the **+** button on each chart. Your choice is remembered in your browser. There is no separate legend: each name in the Last 3 weeks grid has a line sample in that person's colour, so the grid is the key for the charts.
 - **Logging sets.** Tap **+** on a chart to log sets for that exercise. Every set is logged separately (weight and reps, or just reps for reps-only exercises). You can add several sets at once, pick the date, and delete your own entries to fix mistakes.
 - **Barbell or dumbbell.** Exercises that allow it (Bench press, Squat and Shoulder press to start with) ask whether each batch of sets was barbell or dumbbell.
 - **Three chart modes** (radio buttons in A1): total weight, % change, and best set. See [How the numbers work](#how-the-numbers-work).
 - **Equalise.** A checkbox in A1 that counts dumbbell sets at double weight so they can be compared with barbell lifts. Hover or focus "What is this?" beside it for a one-line explanation.
 - **Hover details.** Hover a date on any weight × reps chart to see every person's value for that day and every set they did.
 - **Add exercise.** A tile after the last chart lets anyone add a new exercise (up to 20 in total), logged either as weight × reps or as **reps only** (for bodyweight moves like pull-ups). New charts appear for everyone.
-- **Last 3 weeks.** Sits inside A1, to the right of the controls (below them on a phone), with nothing to scroll. One row per person, one box per day, for the current week plus the two before it (`ACTIVITY_WEEKS` in `src/lib/constants.js`). A filled box in that person's colour means they logged a set or cardio session that day; hovering it names what. Days later in the current week show as dashed, empty boxes. Today's column is outlined all the way down every row. The boxes stretch to fit the space, and when it is narrow the names shorten to their first three letters (hover for the full name).
+- **Last 3 weeks.** Sits inside A1, to the right of the controls (below them on a phone), with nothing to scroll. One row per person, one box per day, for the current week plus the two before it (`ACTIVITY_WEEKS` in `src/lib/constants.js`). A filled box in that person's colour means they logged a set or cardio session that day; hovering it names what. Days later in the current week show as dashed, empty boxes. Today's column is outlined all the way down every row. The rows shrink evenly when there are too many people to fit at full size, the boxes stretch to fit the width, and when it is narrow the names shorten to their first three letters (hover for the full name).
 - **Dark only.** The app is always dark. Each person's stored colour is shown as a lighter twin, so lines stay easy to read on a dark background; the database still stores the original colour.
 - **Cardio.** Logged as minutes, one entry per person per day.
 - **Shared passcode.** Everyone types one group passcode to get in.
@@ -244,7 +244,7 @@ frift/
 │   ├── api.js                 fetch wrapper that adds the passcode header
 │   ├── styles.css             all styling
 │   ├── components/
-│   │   ├── ControlPanel.jsx       tile A1: who you are, chart mode, equalise, key, activity
+│   │   ├── ControlPanel.jsx       tile A1: who you are, chart mode, equalise, activity
 │   │   ├── ActivityStrip.jsx      the last-3-weeks logged/not-logged grid
 │   │   ├── ExerciseChart.jsx      one chart panel and its hover card
 │   │   ├── AddEntryDialog.jsx     the + dialog for logging sets and cardio

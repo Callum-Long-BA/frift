@@ -171,10 +171,11 @@ fieldset {
   }
 }
 
+/* Every tile is the same fixed height. Content has to fit, so nothing makes a tile grow. */
 .panel {
   display: flex;
   flex-direction: column;
-  min-height: 340px;
+  height: 340px;
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius-panel);
@@ -207,7 +208,7 @@ fieldset {
   font-family: var(--display);
   font-style: italic;
   font-weight: 800;
-  font-size: clamp(3.6rem, 6.4vw, 5.6rem);
+  font-size: clamp(3rem, 4.2vw, 4.2rem);
   line-height: 0.82;
   letter-spacing: -0.01em;
   color: var(--plate);
@@ -224,7 +225,8 @@ fieldset {
 .control {
   display: grid;
   grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr);
-  gap: 18px 24px;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 16px 24px;
   padding: 18px;
   background: var(--a1-bg);
   border-color: var(--a1-border);
@@ -240,13 +242,16 @@ fieldset {
 .control-main {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   min-width: 0;
 }
 
+/* On a phone the two halves stack, which cannot fit the fixed height, so this one tile grows. */
 @media (max-width: 640px) {
   .control {
+    height: auto;
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
   }
 }
 
@@ -321,37 +326,6 @@ fieldset {
   height: 1.05rem;
 }
 
-/* Names run along the line and wrap only when the row is full. */
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
-  padding: 0;
-  list-style: none;
-  font-size: 0.95rem;
-}
-
-.legend li {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--a1-muted);
-}
-
-.legend li.is-me {
-  color: var(--a1-text);
-  font-weight: 600;
-}
-
-.legend .you {
-  font-weight: 400;
-  color: var(--a1-muted);
-}
-
-.legend-empty {
-  color: var(--a1-muted);
-}
-
 /* A line sample, so the key looks like what it explains. */
 .swatch {
   display: inline-block;
@@ -359,10 +333,6 @@ fieldset {
   width: 18px;
   height: 4px;
   border-radius: 2px;
-}
-
-.legend .swatch {
-  width: 14px;
 }
 
 /* ---------- Chart panels ---------- */
@@ -416,7 +386,7 @@ fieldset {
 
 .chart-body {
   flex: 1;
-  min-height: 250px;
+  min-height: 0;
   padding: 4px 6px 10px 2px;
 }
 
@@ -527,15 +497,21 @@ fieldset {
 }
 
 .activity h2 {
+  flex: none;
   font-family: var(--display);
   font-weight: 700;
   font-size: 1.6rem;
   line-height: 1.05;
 }
 
-/* Column 1 = names. Then three weeks of seven days, with a narrow spacer between weeks. */
+/* Column 1 = names. Then three weeks of seven days, with a narrow spacer between weeks.
+   The person rows are minmax(0, 20px) (set inline, as the count varies): 20px each when
+   there is room, and shrinking evenly when there are too many people to fit. */
 .act-grid {
   position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: start;
   display: grid;
   grid-template-columns:
     auto repeat(7, minmax(0, 1fr)) 6px repeat(7, minmax(0, 1fr)) 6px repeat(7, minmax(0, 1fr));
@@ -565,17 +541,26 @@ fieldset {
 }
 
 .act-name {
-  max-width: 8ch;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(8ch + 20px);
   padding-right: 6px;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.85rem;
+  line-height: 1;
   color: var(--text-2);
+}
+
+/* The line sample makes the names double as the key for the charts. */
+.act-name .swatch {
+  width: 12px;
 }
 
 .act-name-full {
   display: block;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -604,7 +589,7 @@ fieldset {
 }
 
 .act-cell {
-  height: 20px;
+  align-self: stretch;
   border-radius: 3px;
   background: var(--cell-empty);
 }
@@ -625,6 +610,7 @@ fieldset {
 }
 
 .act-key {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
