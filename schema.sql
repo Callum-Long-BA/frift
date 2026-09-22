@@ -98,3 +98,13 @@ create unique index if not exists entries_one_cardio_per_day
   on entries (person_id, entry_date) where exercise = 'cardio';
 
 create index if not exists entries_by_exercise_date on entries (exercise, entry_date);
+
+-- Rows already imported from the Google Sheet (api/import-sheet.js), so each is logged once.
+-- fingerprint is the row's content plus a count for identical rows. entry_id is empty when
+-- a row was deliberately skipped (cardio already logged that day), or once the entry it
+-- created is deleted in the app; either way the row is not imported again.
+create table if not exists sheet_imports (
+  fingerprint text primary key,
+  entry_id    int references entries(id) on delete set null,
+  imported_at timestamptz not null default now()
+);

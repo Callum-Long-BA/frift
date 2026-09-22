@@ -1,0 +1,3 @@
+{
+  "crons": [{ "path": "/api/import-sheet", "schedule": "0 5 * * *" }]
+}

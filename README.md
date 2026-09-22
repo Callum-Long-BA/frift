@@ -20,8 +20,9 @@ Live at **https://frift.callumlong.com**.
 10. [Deploying changes](#deploying-changes)
 11. [Local development and tests](#local-development-and-tests)
 12. [Operations cookbook (SQL)](#operations-cookbook-sql)
-13. [Security and limits](#security-and-limits)
-14. [Troubleshooting](#troubleshooting)
+13. [Importing from a Google Sheet](#importing-from-a-google-sheet)
+14. [Security and limits](#security-and-limits)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -38,6 +39,8 @@ Live at **https://frift.callumlong.com**.
 - **Last 3 weeks.** Sits inside A1, to the right of the controls (below them on a phone), with nothing to scroll. One row per person, one box per day, for the current week plus the two before it (`ACTIVITY_WEEKS` in `src/lib/constants.js`). A filled box in that person's colour means they logged a set or cardio session that day; hovering it names what. Days later in the current week show as dashed, empty boxes. Today's column is outlined all the way down every row. The rows shrink evenly when there are too many people to fit at full size, the boxes stretch to fit the width, and when it is narrow the names shorten to their first three letters (hover for the full name).
 - **Dark only.** The app is always dark. Each person's stored colour is shown as a lighter twin, so lines stay easy to read on a dark background; the database still stores the original colour.
 - **Cardio.** Logged as minutes, one entry per person per day.
+- **Google Sheet import.** Once a day, FRIFT reads a Google Sheet and logs any new rows automatically. See [Importing from a Google Sheet](#importing-from-a-google-sheet).
+- **Section colours.** Cardio & calisthenics tiles use a very slightly cooler panel colour than Weight training.
 - **Shared passcode.** Everyone types one group passcode to get in.
 
 Starting exercises: Bench press, Lat pull down, Squat, Leg extension, Shoulder press, Incline dumbbell curl, Cardio.
@@ -126,6 +129,8 @@ Set in Vercel: project > Settings > Environment Variables.
 | `DATABASE_URL` | Yes | Neon connection string, including the password. Treat as a secret. |
 | `FRIFT_PASSCODE` | Yes | The shared group passcode. Treat as a secret. |
 | `POSTGRES_URL` | No | Older name for the database URL. Used only if `DATABASE_URL` is missing. |
+| `SHEET_CSV_URL` | For the sheet import | The Google Sheet's "Publish to web" CSV link. See [Importing from a Google Sheet](#importing-from-a-google-sheet). |
+| `CRON_SECRET` | For the sheet import | Any long random string. Vercel sends it with its daily scheduled call, and the import endpoint only accepts that call if it matches. Treat as a secret. |
 
 Other variables the Neon integration created (`DATABASE_URL_UNPOOLED`, `PG...`) are **not used** by the app. Do not rename these with a `VITE_` prefix: in a Vite project, anything starting with `VITE_` is sent to the browser.
 
@@ -197,6 +202,7 @@ All endpoints live under `/api`, take and return JSON, and are never cached.
 | `GET /api/people` | All people: `id`, `name`, `colour`. |
 | `POST /api/people` | Add a person. Body: `{ "name": "Sam" }`. The colour is assigned automatically. Fails with `409` if the name is taken or 10 people already exist. |
 | `GET /api/exercises` | All exercises in chart order: `id`, `name`, `kind`, `equipment_choice`, `created_by`, `sort_order`. |
+| `GET /api/import-sheet` | Import new rows from the Google Sheet now, and return `{ rows, imported, alreadyImported, skipped, errors }`. Vercel Cron calls this daily with `CRON_SECRET` instead of the passcode. |
 | `POST /api/exercises` | Add an exercise. Body: `{ "name": "Romanian deadlift", "personId": 1, "kind": "strength", "equipmentChoice": true }`. `kind` is `strength` (weight × reps, the default) or `reps` (reps only; `equipmentChoice` is ignored). Fails with `409` if the name exists or 20 exercises exist. |
 | `GET /api/entries` | Every logged set, oldest first: `id`, `person_id`, `exercise`, `date` (`YYYY-MM-DD`), `set_number`, `weight`, `reps`, `duration_min`, `equipment`. |
 | `POST /api/entries` | Log sets (see below). Returns the rows created. |
@@ -235,8 +241,10 @@ frift/
 │   ├── people.js              GET / POST people
 │   ├── exercises.js           GET / POST exercises
 │   ├── entries.js             GET / POST / DELETE entries
-│   ├── _http.js               passcode check, method routing, JSON errors
+│   ├── import-sheet.js        daily Google Sheet import (Vercel Cron)
+│   ├── _http.js               passcode and cron checks, method routing, JSON errors
 │   ├── _db.js                 Neon connection (reads DATABASE_URL)
+│   ├── _sheet.js              reads the sheet's CSV into rows
 │   └── _validate.js           input checking and exercise-name slugs
 ├── src/                       the React app
 │   ├── main.jsx               entry point, top-level error screen
@@ -258,6 +266,7 @@ frift/
 │       ├── metrics.js         all chart calculations
 │       └── storage.js         safe localStorage helpers
 ├── test/                      unit tests (49)
+├── vercel.json                daily schedule for the sheet import
 ├── schema.sql                 database setup and upgrades (safe to re-run)
 ├── index.html                 page shell and fonts
 ├── vite.config.js
@@ -408,10 +417,46 @@ You should see two rows: `entries / equipment` and `exercises / equipment_choice
 
 ---
 
+## Importing from a Google Sheet
+
+Once a day, FRIFT reads a Google Sheet and logs any rows it has not seen before. No one has to open the app.
+
+**When:** every day at **05:00 UTC** (06:00 UK time in summer, 05:00 in winter). The schedule is in `vercel.json`, as a cron expression. On Vercel's free Hobby plan a daily job can run at any point within that hour.
+
+**The sheet:** a header row, then **one row per set** (or one row per cardio session). Column order does not matter, headers are matched ignoring case, and extra columns (like Notes) are ignored.
+
+| Column | Needed for | Notes |
+|---|---|---|
+| `Date` | Every row | `22/09/2026` (day first) or `2026-09-22`. A Google Form's `Timestamp` column works too. |
+| `Name` | Every row | Must match a person in FRIFT (ignoring case). Also accepted: `Person`, `Who`. |
+| `Exercise` | Every row | Must match an exercise name in FRIFT (ignoring case). |
+| `Weight` | Weight × reps exercises | kg. For dumbbells, the weight of one dumbbell. Also accepted: `kg`, `Weight (kg)`. |
+| `Reps` | Weight × reps and reps-only exercises | Whole number. |
+| `Minutes` | Cardio | Also accepted: `Duration`, `Mins`. |
+| `Equipment` | Optional | `barbell` or `dumbbell`, for exercises that offer the choice. Blank counts as barbell. |
+
+**Setting it up:**
+
+1. Run the latest `schema.sql` in Neon (it adds the `sheet_imports` table).
+2. In the Google Sheet: **File > Share > Publish to web**, choose the tab with the data and **Comma-separated values (.csv)**, then **Publish**. Copy the link. Anyone with the link can read the sheet, so keep it to gym data.
+3. In Vercel > Settings > Environment Variables, add `SHEET_CSV_URL` (that link) and `CRON_SECRET` (any long random string), then redeploy.
+4. To test without waiting a day, open the browser console on the live site and run:
+   `fetch('/api/import-sheet', { headers: { 'x-frift-passcode': localStorage.getItem('frift.passcode') } }).then(r => r.json()).then(console.log)`
+
+**How it decides what is new:** each row is remembered by its content (date, name, exercise, weight, reps, minutes, equipment), with identical rows counted, so three identical sets on one day are three entries. Inserting or sorting rows is safe. The catches:
+
+- **Editing a row that was already imported** makes it look new, so it is imported again. Delete the old entry in the app.
+- **Deleting an imported entry in the app** does not bring it back on the next run.
+- **Rows that cannot be logged** (unknown name or exercise, missing reps, unreadable date) are skipped and retried every day, so fixing the sheet or adding the person is enough. Each run's result, including these errors, is in Vercel > Logs (search for "Sheet import").
+- **Cardio** is still one per person per day. If it was already logged in the app, the sheet row is skipped for good.
+- Imported sets get the next set number for that day, just like sets logged in the app.
+
+---
+
 ## Security and limits
 
 - **The passcode is the only lock.** It stops strangers using the app or filling the database. The "who are you" dropdown is **not** a login: anyone with the passcode can log as anyone. That is fine for friends, but do not treat it as security.
-- **Secrets stay on the server.** `DATABASE_URL` and `FRIFT_PASSCODE` are only read by the API functions and are never sent to the browser. In Vercel, mark both as **Sensitive** if the option is offered.
+- **Secrets stay on the server.** `DATABASE_URL`, `FRIFT_PASSCODE` and `CRON_SECRET` are only read by the API functions and are never sent to the browser. In Vercel, mark both as **Sensitive** if the option is offered.
 - **The browser never talks to the database directly.** Every read and write goes through a function that checks the passcode and validates the input.
 - **The passcode is saved in the browser** so people don't retype it. Anyone using the same browser profile is treated as having it.
 - **Limits:** 10 people, 20 exercises, 10 sets per save, weights in kg.

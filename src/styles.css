@@ -129,8 +129,11 @@ fieldset {
   grid-column: 1 / 4;
 }
 
+/* A very slightly cooler panel, just enough to set cardio and calisthenics apart. */
 .zone-cc {
   grid-column: 4 / 5;
+  --panel: #141c20;
+  --panel-border: #22303a;
 }
 
 .zone-title {
