@@ -9,7 +9,9 @@ const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const columnFor = (i) => 2 + i + Math.floor(i / 7);
 
 // One row per person, one box per day for the last few weeks. A box is filled in that
-// person's colour on days they logged anything. Today's column is outlined.
+// person's colour on days they logged anything. Today's column is outlined. Each name has
+// a line sample in that person's colour, so this is also the key for the charts. The rows
+// shrink to fit the tile's fixed height, however many people there are.
 // It sits inside the control tile, beside the controls: the boxes stretch to the space
 // available, and when that is narrow the names shrink to their first few letters (see the
 // container query in styles.css).
@@ -27,15 +29,17 @@ export default function ActivityStrip({ people, entries, exercises, me }) {
 
   return (
     <section className="activity" aria-labelledby="activity-title">
-      <header>
-        <h2 id="activity-title">Last {ACTIVITY_WEEKS} weeks</h2>
-        <p className="chart-sub">Days with a set or cardio logged. Hover a box for details.</p>
-      </header>
+      <h2 id="activity-title">Last {ACTIVITY_WEEKS} weeks</h2>
 
       {people.length === 0 ? (
-        <p className="chart-empty">Add yourself to start the record.</p>
+        <p className="chart-empty">No one yet. Add yourself with the menu on the left.</p>
       ) : (
-        <div className="act-grid" role="group" aria-label={`Days logged in the last ${ACTIVITY_WEEKS} weeks`}>
+        <div
+          className="act-grid"
+          role="group"
+          aria-label={`Days logged in the last ${ACTIVITY_WEEKS} weeks`}
+          style={{ gridTemplateRows: `auto auto repeat(${people.length}, minmax(0, 20px))` }}
+        >
           {Array.from({ length: ACTIVITY_WEEKS }, (_, w) => (
             <span key={`w${w}`} className="act-week" style={{ gridColumn: `${columnFor(w * 7)} / span 7`, gridRow: 1 }}>
               {dayLabel(days[w * 7].date).replace(/^\w+ /, '')}
@@ -60,6 +64,7 @@ export default function ActivityStrip({ people, entries, exercises, me }) {
             const loggedCount = days.filter((d) => byDate?.has(d.date)).length;
             return [
               <span key={`n${person.id}`} className={isMe ? 'act-name is-me' : 'act-name'} style={{ gridColumn: 1, gridRow: row }} title={person.name}>
+                <span className="swatch" style={{ background: person.colour }} aria-hidden="true" />
                 <span className="act-name-full" aria-hidden="true">
                   {person.name}
                 </span>
@@ -68,6 +73,7 @@ export default function ActivityStrip({ people, entries, exercises, me }) {
                 </span>
                 <span className="sr-only">
                   {person.name}
+                  {isMe && ' (you)'}
                   {' '}
                   logged on {loggedCount} of the last {days.filter((d) => !d.isFuture).length} days.
                 </span>
@@ -124,6 +130,7 @@ export default function ActivityStrip({ people, entries, exercises, me }) {
         <span>
           <i className="key-box is-upcoming" /> To come
         </span>
+        <span>Hover a box for details</span>
       </p>
     </section>
   );

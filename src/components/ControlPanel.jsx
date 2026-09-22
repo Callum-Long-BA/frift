@@ -9,8 +9,9 @@ const MODE_OPTIONS = [
   ['best', 'Best set'],
 ];
 
-// The big top-left tile: identity, chart mode, the key for line colours, and (as children)
-// the last-3-weeks activity grid beside them.
+// The big top-left tile: identity and chart mode on the left, and (as children) the
+// last-3-weeks activity grid beside them. The grid's name column doubles as the key for
+// line colours, so the tile stays a fixed height however many people there are.
 export default function ControlPanel({
   people,
   me,
@@ -136,17 +137,6 @@ export default function ControlPanel({
             </span>
           </span>
         </div>
-
-        <ul className="legend" aria-label="Line colours">
-          {people.length === 0 && <li className="legend-empty">No one yet. Add yourself with the menu above.</li>}
-          {people.map((p) => (
-            <li key={p.id} className={me?.id === p.id ? 'is-me' : undefined}>
-              <span className="swatch" style={{ background: p.colour }} aria-hidden="true" />
-              {p.name}
-              {me?.id === p.id && <span className="you"> (you)</span>}
-            </li>
-          ))}
-        </ul>
       </div>
 
       {children}
