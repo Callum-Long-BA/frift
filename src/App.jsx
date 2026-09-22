@@ -9,6 +9,8 @@ import ExerciseChart from './components/ExerciseChart.jsx';
 import AddEntryDialog from './components/AddEntryDialog.jsx';
 import AddExerciseDialog from './components/AddExerciseDialog.jsx';
 import ActivityStrip from './components/ActivityStrip.jsx';
+import ActivityLog from './components/ActivityLog.jsx';
+import SheetsInfo from './components/SheetsInfo.jsx';
 import AddExerciseTile from './components/AddExerciseTile.jsx';
 import PasscodeGate from './components/PasscodeGate.jsx';
 
@@ -142,25 +144,29 @@ export default function App() {
         </div>
       )}
 
+      <ControlPanel
+        people={themedPeople}
+        me={me}
+        onSelect={selectPerson}
+        onAddPerson={addPerson}
+        mode={mode}
+        onModeChange={changeMode}
+        equalise={equalise}
+        onEqualiseChange={changeEqualise}
+      >
+        {status === 'ready' && (
+          <>
+            <ActivityStrip people={themedPeople} entries={entries} exercises={exercises} me={me} />
+            <ActivityLog people={themedPeople} entries={entries} exercises={exercises} />
+          </>
+        )}
+        <SheetsInfo />
+      </ControlPanel>
+
       <div className="zone zone-weights" role="region" aria-labelledby="zone-weights-title">
         <h2 id="zone-weights-title" className="zone-title">
           Weight training
         </h2>
-
-        <ControlPanel
-          people={themedPeople}
-          me={me}
-          onSelect={selectPerson}
-          onAddPerson={addPerson}
-          mode={mode}
-          onModeChange={changeMode}
-          equalise={equalise}
-          onEqualiseChange={changeEqualise}
-        >
-          {status === 'ready' && (
-            <ActivityStrip people={themedPeople} entries={entries} exercises={exercises} me={me} />
-          )}
-        </ControlPanel>
 
         {status === 'loading' && exercises.length === 0 && (
           <section className="panel">

@@ -10,6 +10,7 @@ import {
   activityByPerson,
   dayLabel,
   weekGrid,
+  recentSessions,
 } from '../src/lib/metrics.js';
 
 const bench = { id: 'bench_press', name: 'Bench press', kind: 'strength' };
@@ -381,4 +382,55 @@ test('activityByPerson counts any entry, merges exercises on the same day, and i
 test('dayLabel is short and readable', () => {
   assert.match(dayLabel('2026-09-08'), /Tue/);
   assert.match(dayLabel('2026-09-08'), /8/);
+});
+
+// ---------- activity log ----------
+
+const kinds = [bench, cardio, { id: 'pull_ups', name: 'Pull ups', kind: 'reps' }];
+
+test('recentSessions groups by person and day, newest logged first, and caps the count', () => {
+  const entries = [
+    set(1, '2026-09-01', 1, 60, 8),
+    set(2, '2026-09-02', 1, 40, 8),
+    run(1, '2026-09-01', 20), // logged after person 2, so person 1's session is newest
+  ];
+  const sessions = recentSessions(entries, kinds, 5);
+  assert.deepEqual(sessions.map((s) => [s.personId, s.date]), [[1, '2026-09-01'], [2, '2026-09-02']]);
+  assert.deepEqual(sessions[0].exerciseIds, ['bench_press', 'cardio']);
+  assert.equal(recentSessions(entries, kinds, 1).length, 1);
+});
+
+test('a PR is a heavier top weight than any earlier session; the first session is not a PR', () => {
+  const entries = [
+    set(1, '2026-09-01', 1, 60, 8),
+    set(1, '2026-09-03', 1, 62.5, 3), // PR: heavier, even with fewer reps
+    set(1, '2026-09-05', 1, 62.5, 8), // equal is not a PR
+  ];
+  const byDate = new Map(recentSessions(entries, kinds, 5).map((s) => [s.date, s.prs]));
+  assert.deepEqual(byDate.get('2026-09-01'), []);
+  assert.deepEqual(byDate.get('2026-09-03'), ['bench_press']);
+  assert.deepEqual(byDate.get('2026-09-05'), []);
+});
+
+test('barbell and dumbbell records are kept apart; unrecorded equipment counts as barbell', () => {
+  const db = (date, w) => ({ ...set(1, date, 1, w, 8), equipment: 'dumbbell' });
+  const entries = [set(1, '2026-09-01', 1, 60, 8), db('2026-09-03', 25), db('2026-09-05', 27.5), { ...set(1, '2026-09-06', 1, 60, 8), equipment: 'barbell' }];
+  const byDate = new Map(recentSessions(entries, kinds, 5).map((s) => [s.date, s.prs]));
+  assert.deepEqual(byDate.get('2026-09-03'), []); // first dumbbell session
+  assert.deepEqual(byDate.get('2026-09-05'), ['bench_press']);
+  assert.deepEqual(byDate.get('2026-09-06'), []); // same as the earlier unrecorded (barbell) 60
+});
+
+test('reps-only PRs are most reps in a set; cardio PRs are the longest session', () => {
+  const pull = (date, n) => set(1, date, 1, null, n, 'pull_ups');
+  const entries = [pull('2026-09-01', 10), pull('2026-09-02', 12), run(1, '2026-09-01', 30), run(1, '2026-09-02', 25)];
+  const [latest] = recentSessions(entries, kinds, 1);
+  assert.equal(latest.date, '2026-09-02');
+  assert.deepEqual(latest.prs, ['pull_ups']);
+});
+
+test('only earlier days count, not other people or later days', () => {
+  const entries = [set(2, '2026-09-01', 1, 100, 5), set(1, '2026-09-02', 1, 50, 5), set(1, '2026-09-04', 1, 70, 5), set(1, '2026-09-03', 1, 60, 5)];
+  const byDate = new Map(recentSessions(entries, kinds, 5).filter((s) => s.personId === 1).map((s) => [s.date, s.prs]));
+  assert.deepEqual(byDate.get('2026-09-03'), ['bench_press']); // beats 50 even though 70 was logged first
 });
