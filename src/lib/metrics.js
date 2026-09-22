@@ -18,6 +18,42 @@ export function todayString(now = new Date()) {
   return `${y}-${m}-${d}`;
 }
 
+// The days shown in the activity strip: `weeks` full Monday-to-Sunday weeks, ending with
+// the week that contains `today` (so days later this week are included, marked isFuture).
+// today is 'YYYY-MM-DD'. Returns [{ date, week, dayOfWeek, isToday, isFuture }].
+export function weekGrid(today, weeks = 3) {
+  const t = toTimestamp(today);
+  const mondayOffset = (new Date(t).getUTCDay() + 6) % 7; // Monday = 0 ... Sunday = 6
+  const start = t - mondayOffset * DAY_MS - (weeks - 1) * 7 * DAY_MS;
+  return Array.from({ length: weeks * 7 }, (_, i) => {
+    const date = new Date(start + i * DAY_MS).toISOString().slice(0, 10);
+    return { date, week: Math.floor(i / 7), dayOfWeek: i % 7, isToday: date === today, isFuture: date > today };
+  });
+}
+
+// Map<personId, Map<'YYYY-MM-DD', Set<exerciseId>>> for days between `from` and `to`.
+// Any entry at all (a set or a cardio session) counts as having logged that day.
+export function activityByPerson(entries, from, to) {
+  const out = new Map();
+  for (const e of entries) {
+    if (e.date < from || e.date > to) continue;
+    if (!out.has(e.person_id)) out.set(e.person_id, new Map());
+    const byDate = out.get(e.person_id);
+    if (!byDate.has(e.date)) byDate.set(e.date, new Set());
+    byDate.get(e.date).add(e.exercise);
+  }
+  return out;
+}
+
+export function dayLabel(date) {
+  return new Date(toTimestamp(date)).toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
+}
+
 // The set number the next logged set will get (matches what the API assigns).
 export function nextSetNumber(entries, personId, exerciseId, date) {
   let highest = 0;

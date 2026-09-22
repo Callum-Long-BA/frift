@@ -17,16 +17,24 @@ export const EQUIPMENT = ['barbell', 'dumbbell'];
 // What the charts can show: total weight, % change, or best single set.
 export const MODES = ['total', 'pct', 'best'];
 
-// Handed out in order as people join. Chosen to stay distinguishable on white.
-export const PERSON_COLOURS = [
-  '#E5322D', // red
-  '#1F5FBF', // blue
-  '#E6A700', // amber
-  '#1E9E5A', // green
-  '#7A3FD1', // violet
-  '#00A3AD', // teal
-  '#D6207E', // magenta
-  '#6B7280', // slate
-  '#8B5A2B', // brown
-  '#14161A', // black
+// Handed out in order as people join. The `light` value is what gets stored against a
+// person in the database; `dark` is the lighter twin shown on the dark theme, so the
+// same person keeps the same identity in both themes (and the old "black" stays visible).
+export const PERSON_PALETTE = [
+  { name: 'red', light: '#E5322D', dark: '#FF5C57' },
+  { name: 'blue', light: '#1F5FBF', dark: '#5B9BFF' },
+  { name: 'amber', light: '#E6A700', dark: '#FFC53D' },
+  { name: 'green', light: '#1E9E5A', dark: '#3DD68C' },
+  { name: 'violet', light: '#7A3FD1', dark: '#A78BFA' },
+  { name: 'teal', light: '#00A3AD', dark: '#22D3EE' },
+  { name: 'magenta', light: '#D6207E', dark: '#E879F9' },
+  { name: 'slate', light: '#6B7280', dark: '#9CA3AF' },
+  { name: 'brown', light: '#8B5A2B', dark: '#C79A66' },
+  { name: 'black', light: '#14161A', dark: '#F3F4F6' },
 ];
+
+// What the API stores. Unchanged for the database: still the light values.
+export const PERSON_COLOURS = PERSON_PALETTE.map((c) => c.light);
+
+// The activity strip shows this many weeks, Monday to Sunday, ending with the current week.
+export const ACTIVITY_WEEKS = 3;

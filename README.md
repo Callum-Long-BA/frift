@@ -28,13 +28,15 @@ Live at **https://frift.callumlong.com**.
 ## What it does
 
 - **Grid of charts.** The page is a grid: the top-left cell (A1) holds your controls, and every other cell is one exercise. On a wide screen it is four columns; it drops to two and then one on smaller screens.
-- **Who are you?** A dropdown in A1 picks who you are, or adds a new person. Choosing yourself thickens your line on every chart, dims everyone else's, and switches on the **+** button on each chart. Your choice is remembered in your browser.
+- **Who are you?** A dropdown in A1 picks who you are, or adds a new person. Choosing yourself thickens your line on every chart, dims everyone else's, and switches on the **+** button on each chart. Your choice is remembered in your browser. The legend below it runs the names along one line, wrapping only when it runs out of room.
 - **Logging sets.** Tap **+** on a chart to log sets for that exercise. Every set is logged separately (weight and reps). You can add several sets at once, pick the date, and delete your own entries to fix mistakes.
 - **Barbell or dumbbell.** Exercises that allow it (Bench press, Squat and Shoulder press to start with) ask whether each batch of sets was barbell or dumbbell.
 - **Three chart modes** (radio buttons in A1): total weight, % change, and best set. See [How the numbers work](#how-the-numbers-work).
 - **Equalise.** A checkbox in A1 that counts dumbbell sets at double weight so they can be compared with barbell lifts.
 - **Hover details.** Hover a date on any weight × reps chart to see every person's value for that day and every set they did.
 - **Add exercise.** A tile after the last chart lets anyone add a new weight × reps exercise (up to 20 in total). New charts appear for everyone.
+- **Last 3 weeks strip.** Sits beside A1, above the exercise charts. One row per person, one box per day, for the current week plus the two before it (`ACTIVITY_WEEKS` in `src/lib/constants.js`). A filled box in that person's colour means they logged a set or cardio session that day; hovering it names what. Days later in the current week show as dashed, empty boxes. Today's column is outlined all the way down every row.
+- **Dark or light.** The app opens in dark mode. A switch at the bottom of A1 flips to light, and your choice is remembered in your browser. Each person's line colour has a lighter twin used only on the dark theme, so lines stay easy to read on a dark background; the database still stores one colour per person either way.
 - **Cardio.** Logged as minutes, one entry per person per day.
 - **Shared passcode.** Everyone types one group passcode to get in.
 
@@ -242,6 +244,7 @@ frift/
 │   ├── styles.css             all styling
 │   ├── components/
 │   │   ├── ControlPanel.jsx       cell A1: who you are, chart mode, equalise, key
+│   │   ├── ActivityStrip.jsx      the last-3-weeks logged/not-logged grid
 │   │   ├── ExerciseChart.jsx      one chart panel and its hover card
 │   │   ├── AddEntryDialog.jsx     the + dialog for logging sets and cardio
 │   │   ├── AddExerciseTile.jsx    the "Add exercise" tile
@@ -250,6 +253,7 @@ frift/
 │   │   └── ErrorBoundary.jsx      stops one failure blanking the whole page
 │   └── lib/
 │       ├── constants.js       limits, modes, colour palette (shared with /api)
+│       ├── theme.js            light/dark colour lookups for the charts
 │       ├── metrics.js         all chart calculations
 │       └── storage.js         safe localStorage helpers
 ├── test/                      unit tests (49)
@@ -276,6 +280,7 @@ frift/
   | `frift.me` | Who you picked in A1. |
   | `frift.mode` | `total`, `pct` or `best`. |
   | `frift.equalise` | Whether Equalise is ticked. |
+  | `frift.theme` | `dark` or `light`. |
 
   None of this is shared between people or devices.
 - **Dialogs** use the browser's built-in `<dialog>` element, so Escape closes them and focus is handled for you.

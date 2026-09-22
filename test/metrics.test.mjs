@@ -7,6 +7,9 @@ import {
   pickTicks,
   repsRadius,
   seriesKey,
+  activityByPerson,
+  dayLabel,
+  weekGrid,
 } from '../src/lib/metrics.js';
 
 const bench = { id: 'bench_press', name: 'Bench press', kind: 'strength' };
@@ -304,4 +307,59 @@ test('best mode: one dot per person per day, with that day\'s best reps availabl
   assert.equal(best(seriesKey(1)).reps, 8);
   assert.equal(rows[0][seriesKey(2)], 40);
   assert.equal(best(seriesKey(2)).reps, 12);
+});
+
+// ---------- activity strip ----------
+
+test('weekGrid: 3 Monday-to-Sunday weeks ending with the current week', () => {
+  const grid = weekGrid('2026-09-23', 3); // a Wednesday
+  assert.equal(grid.length, 21);
+  assert.equal(grid[0].date, '2026-09-07'); // a Monday, two weeks before this week's Monday
+  assert.equal(grid[14].date, '2026-09-21'); // this week's Monday
+  assert.equal(grid[20].date, '2026-09-27'); // this week's Sunday
+  assert.ok(grid.every((d, i) => d.dayOfWeek === i % 7 && d.week === Math.floor(i / 7)));
+});
+
+test('weekGrid: on a Monday, today is the first box of the current week and 6 days are still to come', () => {
+  const grid = weekGrid('2026-09-21', 3);
+  const todayIndex = grid.findIndex((d) => d.isToday);
+  assert.equal(todayIndex, 14);
+  assert.equal(grid[todayIndex].dayOfWeek, 0);
+  assert.equal(grid.filter((d) => d.isFuture).length, 6);
+  assert.ok(grid.slice(14 + 1).every((d) => d.isFuture));
+});
+
+test('weekGrid: on a Sunday, today is the last box and nothing is still to come', () => {
+  const grid = weekGrid('2026-09-20', 3);
+  assert.equal(grid.findIndex((d) => d.isToday), 20);
+  assert.equal(grid.filter((d) => d.isFuture).length, 0);
+  assert.equal(grid[0].date, '2026-08-31');
+});
+
+test('weekGrid crosses month and year boundaries correctly', () => {
+  const grid = weekGrid('2026-01-01', 3); // a Thursday
+  assert.equal(grid[0].date, '2025-12-15');
+  assert.equal(grid[20].date, '2026-01-04');
+  assert.equal(new Set(grid.map((d) => d.date)).size, 21);
+});
+
+test('activityByPerson counts any entry, merges exercises on the same day, and ignores dates outside the range', () => {
+  const entries = [
+    set(1, '2026-09-08', 1, 60, 8),
+    set(1, '2026-09-08', 1, 100, 5, 'squat'),
+    run(1, '2026-09-10', 30),
+    set(1, '2026-08-01', 1, 60, 8), // before the range
+    set(2, '2026-09-30', 1, 40, 10), // after the range
+    set(2, '2026-09-09', 1, 40, 10),
+  ];
+  const a = activityByPerson(entries, '2026-09-07', '2026-09-27');
+  assert.deepEqual([...a.get(1).keys()].sort(), ['2026-09-08', '2026-09-10']);
+  assert.deepEqual([...a.get(1).get('2026-09-08')].sort(), ['bench_press', 'squat']);
+  assert.deepEqual([...a.get(1).get('2026-09-10')], ['cardio']);
+  assert.deepEqual([...a.get(2).keys()], ['2026-09-09']);
+});
+
+test('dayLabel is short and readable', () => {
+  assert.match(dayLabel('2026-09-08'), /Tue/);
+  assert.match(dayLabel('2026-09-08'), /8/);
 });

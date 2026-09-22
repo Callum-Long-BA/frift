@@ -20,6 +20,7 @@ import {
   repsRadius,
   seriesKey,
 } from '../lib/metrics.js';
+import { CHART } from '../lib/theme.js';
 
 // Hover card: everyone's value for that day, plus every set they did.
 // Sets that count toward the chart in the current mode are bold; the rest are faded.
@@ -84,7 +85,7 @@ export function ChartTooltip({ active, payload, label, mode, kind, equalise = fa
 
 // In best-set mode each dot is drawn by hand so its size can show the reps of that
 // day's best set. Recharts calls this with the point's position and its data row.
-function repsDot(person, opacity, active) {
+function repsDot(person, opacity, active, ring) {
   return function drawDot({ cx, cy, payload }) {
     if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
     const best = (payload?.detail?.[seriesKey(person.id)] ?? []).find((s) => s.counts);
@@ -97,7 +98,7 @@ function repsDot(person, opacity, active) {
         r={repsRadius(best.reps) + (active ? 1.5 : 0)}
         fill={person.colour}
         fillOpacity={opacity}
-        stroke={active ? '#fff' : 'none'}
+        stroke={active ? ring : 'none'}
         strokeWidth={active ? 2 : 0}
       />
     );
@@ -113,7 +114,18 @@ function subtitleFor(exercise, mode, equalise) {
   return equalise && exercise.equipment_choice ? `${text}. Dumbbells doubled.` : text;
 }
 
-export default function ExerciseChart({ exercise, people, entries, me, mode, equalise = false, loading, onAdd }) {
+export default function ExerciseChart({
+  exercise,
+  people,
+  entries,
+  me,
+  mode,
+  equalise = false,
+  theme = 'dark',
+  loading,
+  onAdd,
+}) {
+  const colours = CHART[theme] ?? CHART.dark;
   const { rows, personIds } = useMemo(
     () => buildChartData(entries, exercise, mode, { equalise }),
     [entries, exercise, mode, equalise],
@@ -161,7 +173,7 @@ export default function ExerciseChart({ exercise, people, entries, me, mode, equ
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke="#E4E7EA" vertical={false} />
+              <CartesianGrid stroke={colours.grid} vertical={false} />
               <XAxis
                 dataKey="t"
                 type="number"
@@ -169,21 +181,21 @@ export default function ExerciseChart({ exercise, people, entries, me, mode, equ
                 domain={[(min) => min - DAY_MS, (max) => max + DAY_MS]}
                 ticks={ticks}
                 tickFormatter={formatDay}
-                tick={{ fontSize: 11, fill: '#5B636D' }}
+                tick={{ fontSize: 11, fill: colours.tick }}
                 tickLine={false}
-                axisLine={{ stroke: '#C9CED3' }}
+                axisLine={{ stroke: colours.axis }}
               />
               <YAxis
                 width={mode === 'pct' ? 46 : 44}
-                tick={{ fontSize: 11, fill: '#5B636D' }}
+                tick={{ fontSize: 11, fill: colours.tick }}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v) => (mode === 'pct' ? `${v}%` : v)}
               />
-              {mode === 'pct' && <ReferenceLine y={0} stroke="#9AA1A9" strokeDasharray="4 4" />}
+              {mode === 'pct' && <ReferenceLine y={0} stroke={colours.zero} strokeDasharray="4 4" />}
               <Tooltip
                 content={<ChartTooltip mode={mode} kind={exercise.kind} equalise={equalise} />}
-                cursor={{ stroke: '#9AA1A9' }}
+                cursor={{ stroke: colours.cursor }}
                 allowEscapeViewBox={{ x: false, y: true }}
                 wrapperStyle={{ zIndex: 20, outline: 'none' }}
                 isAnimationActive={false}
@@ -203,10 +215,10 @@ export default function ExerciseChart({ exercise, people, entries, me, mode, equ
                     strokeOpacity={opacity}
                     dot={
                       sizeByReps
-                        ? repsDot(person, opacity, false)
+                        ? repsDot(person, opacity, false, colours.ring)
                         : { r: isMe ? 4 : 2.5, fill: person.colour, fillOpacity: opacity, strokeWidth: 0 }
                     }
-                    activeDot={sizeByReps ? repsDot(person, 1, true) : { r: isMe ? 6 : 4 }}
+                    activeDot={sizeByReps ? repsDot(person, 1, true, colours.ring) : { r: isMe ? 6 : 4 }}
                     connectNulls
                     isAnimationActive={false}
                   />
