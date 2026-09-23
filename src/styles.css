@@ -477,10 +477,11 @@ fieldset {
 
 /* ---------- Full-screen chart ---------- */
 
+/* Width and height are set by ChartFrame: the board's width, in the window's proportions. */
 .full-dialog {
-  width: calc(100vw - 32px);
+  width: calc(100vw - 48px);
   max-width: none;
-  height: calc(100vh - 32px);
+  height: calc(100vh - 48px);
   max-height: none;
   padding: 0;
   background: var(--panel);
@@ -498,7 +499,7 @@ fieldset {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding-bottom: 12px;
+  padding: 10px 14px 18px 8px;
 }
 
 .full-inner .chart-head h2 {
@@ -510,13 +511,6 @@ fieldset {
   min-height: 0;
 }
 
-@media (max-width: 640px) {
-  .full-dialog {
-    width: 100vw;
-    height: 100vh;
-    border-radius: 0;
-  }
-}
 
 .chart-head h2 {
   font-family: var(--display);
