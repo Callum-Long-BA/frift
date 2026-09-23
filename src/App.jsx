@@ -3,9 +3,11 @@ import { api, AuthError, clearPasscode, getPasscode } from './api.js';
 import { MAX_EXERCISES, MODES } from './lib/constants.js';
 import { readStored, writeStored } from './lib/storage.js';
 import { colourFor } from './lib/theme.js';
+import { todayString } from './lib/metrics.js';
 import ControlPanel from './components/ControlPanel.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import ExerciseChart from './components/ExerciseChart.jsx';
+import RunningChart from './components/RunningChart.jsx';
 import AddEntryDialog from './components/AddEntryDialog.jsx';
 import AddExerciseDialog from './components/AddExerciseDialog.jsx';
 import ActivityStrip from './components/ActivityStrip.jsx';
@@ -23,6 +25,7 @@ export default function App() {
   const [people, setPeople] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [entries, setEntries] = useState([]);
+  const [bodyWeights, setBodyWeights] = useState([]);
   const [status, setStatus] = useState('loading'); // loading | ready | error
   const [error, setError] = useState('');
   const [meId, setMeId] = useState(() => Number(readStored(ME_KEY)) || null);
@@ -32,6 +35,7 @@ export default function App() {
   });
   const [equalise, setEqualise] = useState(() => readStored(EQUALISE_KEY) === '1');
   const [dialogExerciseId, setDialogExerciseId] = useState(null);
+  const [dialogRunType, setDialogRunType] = useState('easy');
   const [addingExercise, setAddingExercise] = useState(false);
 
   // People are stored with their original colour; show the lighter twin that suits the dark page.
@@ -41,14 +45,20 @@ export default function App() {
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setStatus('loading');
     try {
-      const [nextPeople, nextExercises, nextEntries] = await Promise.all([
+      const [nextPeople, nextExercises, nextEntries, nextBodyWeights] = await Promise.all([
         api.people(),
         api.exercises(),
         api.entries(),
+        // Body weight only feeds the "× BW" mode, so a failure here should not stop the page.
+        api.bodyWeights().catch((err) => {
+          if (err instanceof AuthError) throw err;
+          return [];
+        }),
       ]);
       setPeople(nextPeople);
       setExercises(nextExercises);
       setEntries(nextEntries);
+      setBodyWeights(nextBodyWeights);
       setError('');
       setStatus('ready');
     } catch (err) {
@@ -99,9 +109,21 @@ export default function App() {
     writeStored(EQUALISE_KEY, next ? '1' : '0');
   }
 
+  // One reading per person per day, so today's replaces any earlier one from today.
+  async function logBodyWeight(weightKg) {
+    const saved = await api.logBodyWeight(me.id, todayString(), weightKg);
+    setBodyWeights((prev) => [
+      ...prev.filter((b) => !(b.person_id === saved.person_id && b.date === saved.date)),
+      saved,
+    ]);
+  }
+
   if (!unlocked) return <PasscodeGate onUnlock={() => setUnlocked(true)} />;
 
   const dialogExercise = exercises.find((e) => e.id === dialogExerciseId);
+  const latestBodyWeight = me
+    ? bodyWeights.filter((b) => b.person_id === me.id).sort((a, b) => (a.date < b.date ? 1 : -1))[0] ?? null
+    : null;
 
   // Weighted exercises fill the left three columns; cardio and reps-only exercises
   // stack in the far right column. Each keeps its own sort order.
@@ -111,7 +133,7 @@ export default function App() {
   const renderChart = (exercise) => (
     <ErrorBoundary
       key={exercise.id}
-      resetKey={`${mode}-${equalise}-${entries.length}`}
+      resetKey={`${mode}-${equalise}-${entries.length}-${bodyWeights.length}`}
       fallback={(error) => (
         <section className="panel">
           <p className="chart-empty">
@@ -120,16 +142,31 @@ export default function App() {
         </section>
       )}
     >
-      <ExerciseChart
-        exercise={exercise}
-        people={themedPeople}
-        entries={entries}
-        me={me}
-        mode={mode}
-        equalise={equalise}
-        loading={status === 'loading'}
-        onAdd={() => setDialogExerciseId(exercise.id)}
-      />
+      {exercise.kind === 'running' ? (
+        <RunningChart
+          exercise={exercise}
+          people={themedPeople}
+          entries={entries}
+          me={me}
+          loading={status === 'loading'}
+          onAdd={(runType) => {
+            setDialogRunType(runType);
+            setDialogExerciseId(exercise.id);
+          }}
+        />
+      ) : (
+        <ExerciseChart
+          exercise={exercise}
+          people={themedPeople}
+          entries={entries}
+          bodyWeights={bodyWeights}
+          me={me}
+          mode={mode}
+          equalise={equalise}
+          loading={status === 'loading'}
+          onAdd={() => setDialogExerciseId(exercise.id)}
+        />
+      )}
     </ErrorBoundary>
   );
 
@@ -153,6 +190,8 @@ export default function App() {
         onModeChange={changeMode}
         equalise={equalise}
         onEqualiseChange={changeEqualise}
+        latestBodyWeight={latestBodyWeight}
+        onLogBodyWeight={logBodyWeight}
       >
         {status === 'ready' && (
           <>
@@ -197,6 +236,7 @@ export default function App() {
         <AddEntryDialog
           key={`${dialogExercise.id}-${me.id}`}
           exercise={dialogExercise}
+          runType={dialogRunType}
           person={me}
           entries={entries}
           onClose={() => setDialogExerciseId(null)}

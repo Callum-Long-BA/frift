@@ -99,7 +99,8 @@ export default route(
         sql`select id, name from people`,
         sql`select id, name, kind from exercises`,
         sql`select id, person_id, exercise, to_char(entry_date, 'YYYY-MM-DD') as date, set_number,
-                   weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment
+                   weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment,
+                   run_type, distance_km::float8 as distance_km, duration_sec
             from entries where entry_date <= ${date}::date`,
       ]);
 

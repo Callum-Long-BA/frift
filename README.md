@@ -32,7 +32,11 @@ Live at **https://frift.callumlong.com**.
 - **Who are you?** A dropdown in A1 picks who you are, or adds a new person. Choosing yourself thickens your line on every chart, dims everyone else's, and switches on the **+** button on each chart. Your choice is remembered in your browser. There is no separate legend: each name in the Last 3 weeks grid has a line sample in that person's colour, so the grid is the key for the charts.
 - **Logging sets.** Tap **+** on a chart to log sets for that exercise. Every set is logged separately (weight and reps, or just reps for reps-only exercises). You can add several sets at once, pick the date, and delete your own entries to fix mistakes.
 - **Barbell or dumbbell.** Exercises that allow it (Bench press, Squat and Shoulder press to start with) ask whether each batch of sets was barbell or dumbbell.
-- **Three chart modes** (radio buttons in A1): total weight, % change, and best set. See [How the numbers work](#how-the-numbers-work).
+- **Four chart modes** (radio buttons in A1): Total, % change, Best set and **× BW** (best set as a multiple of body weight). Hover a mode for its full name. See [How the numbers work](#how-the-numbers-work).
+- **Body weight.** A field under the chart options logs your body weight for today (one reading per day; saving again replaces it). There is no body weight tile: it is only used by the × BW mode. Hover the field to see your last reading.
+- **Assisted exercises.** Log the assistance as a minus weight, e.g. `-20` for a pull up with 20 kg of help. Less assistance counts as a better set and as a PR.
+- **Full screen.** Every chart tile has an expand button (⤢) beside the **+** that opens it full screen, with more dates on the axis. Escape or × closes it.
+- **Running.** A tile of its own in Cardio & calisthenics (Cardio is unchanged). A dropdown at the top picks **Easy**, **Tempo** or **Intervals**, and **+** logs a run of that type with a distance (km) and a time (minutes and seconds). Easy charts the distance per day. Tempo charts the best pace, for **5K**, **10K** or **All** (a switch under the dropdown; 5K and 10K allow 5% either way); tempo has 5 km and 10 km quick-pick buttons when logging. Intervals are logged as several distance-and-time pairs and chart the session's average pace (total time ÷ total distance). Pace charts are upside down so faster is higher. Your dropdown and switch choices are remembered in your browser.
 - **Equalise.** A checkbox in A1 that counts dumbbell sets at double weight so they can be compared with barbell lifts. Hover or focus "What is this?" beside it for a one-line explanation.
 - **Hover details.** Hover a date on any weight × reps chart to see every person's value for that day and every set they did.
 - **Add exercise.** A tile after the last chart lets anyone add a new exercise (up to 20 in total), logged either as weight × reps or as **reps only** (for bodyweight moves like pull-ups). New charts appear for everyone.
@@ -58,7 +62,9 @@ Sets are stored one row per set. All the chart maths happens in the browser (`sr
 | **% change** | The total weight above, shown as % change from that person's **own first logged day** for that exercise. Every line starts at 0%. A person whose first value is zero is left out, because change from zero is undefined. |
 | **Best set** | The day's best set is the one with the highest weight × reps, looking at **all** sets that day (not only the last 3). The vertical axis is that set's **weight**; hover a point to see its reps. |
 | **Reps-only exercises** | Reps stand in for weight × reps: **total** is the reps over the last 3 sets, **% change** is change in that total, and **best set** is the most reps in one set. Equalise does not apply. |
+| **× BW** | The best set's weight (as in Best set, doubled for dumbbells when Equalise is on) divided by that person's body weight: the latest reading on or before that day, or their first reading for earlier days. 100 kg at 80 kg body weight is 1.25×. People with no body weight logged are left out. Reps-only and cardio charts show the same as Best set. |
 | **Cardio** (any mode) | Minutes per day. |
+| **Running** (own switch, ignores the mode) | Easy: km per day. Tempo: fastest pace that day at the chosen distance. Intervals: total time ÷ total distance for the session. |
 
 Other rules:
 
@@ -173,16 +179,28 @@ Defined in `schema.sql`. The script is **idempotent**: safe to run again on a li
 | `exercise` | Must match `exercises.id`. |
 | `entry_date` | The day the set was done. |
 | `set_number` | 1, 2, 3 ... through the day, per person per exercise. |
-| `weight` | kg. For dumbbells, the weight of **one** dumbbell. Empty for cardio and reps-only exercises. |
+| `weight` | kg. For dumbbells, the weight of **one** dumbbell. Negative for assisted sets (the assistance). Empty for cardio, running and reps-only exercises. |
 | `reps` | Whole number. Empty for cardio. |
 | `duration_min` | Minutes. Cardio only. |
+| `run_type` | `easy`, `tempo` or `intervals`. Running only. |
+| `distance_km` | Km, two decimals. Running only. |
+| `duration_sec` | Whole seconds. Running only. |
 | `equipment` | `'barbell'` or `'dumbbell'` (lowercase, exactly), or empty. Empty counts as barbell. |
+| `created_at` | |
+
+### `body_weights` (one reading per person per day)
+
+| Column | Notes |
+|---|---|
+| `person_id` | Whose reading it is. |
+| `entry_date` | The day. Together with `person_id`, the key, so logging again that day replaces it. |
+| `weight_kg` | 20 to 400, one decimal. |
 | `created_at` | |
 
 ### Rules enforced by the database
 
-- Non-cardio rows need `reps` and no `duration_min` (the API also requires `weight` unless the exercise is reps only); cardio rows need only `duration_min`.
-- Weight cannot be negative, reps at least 1, duration above 0.
+- Cardio rows need only `duration_min`. Running rows need `run_type`, `distance_km` and `duration_sec` and nothing else. Other rows need `reps` (the API also requires `weight` unless the exercise is reps only).
+- Reps at least 1; minutes, distance and time above 0. Weight may be negative (assisted); the API keeps it between -500 and 1000 kg.
 - `equipment` can only be `barbell`, `dumbbell` or empty.
 - A person cannot have two entries with the same exercise, date and set number.
 - **One cardio entry per person per day.**
@@ -208,6 +226,10 @@ All endpoints live under `/api`, take and return JSON, and are never cached.
 | `GET /api/entries` | Every logged set, oldest first: `id`, `person_id`, `exercise`, `date` (`YYYY-MM-DD`), `set_number`, `weight`, `reps`, `duration_min`, `equipment`. |
 | `POST /api/entries` | Log sets (see below). Returns the rows created. |
 | `DELETE /api/entries?id=12&personId=3` | Delete one entry. Only succeeds if it belongs to that person. |
+| `GET /api/bodyweights` | Every body weight reading: `person_id`, `date`, `weight_kg`. |
+| `POST /api/bodyweights` | Log a body weight. Body: `{ "personId": 1, "date": "2026-09-23", "weightKg": 80.5 }`. Replaces that person's reading for that day. |
+
+**Logging a run:** `{ "personId": 1, "exercise": "running", "date": "2026-09-23", "runType": "tempo", "runs": [ { "distanceKm": 5, "seconds": 1450 } ] }`. Easy and tempo take one run; intervals take up to 10, one per interval.
 
 **Logging strength sets:**
 
@@ -240,6 +262,7 @@ All endpoints live under `/api`, take and return JSON, and are never cached.
 frift/
 ├── api/                       Vercel serverless functions
 │   ├── people.js              GET / POST people
+│   ├── bodyweights.js         GET / POST body weight readings
 │   ├── exercises.js           GET / POST exercises
 │   ├── entries.js             GET / POST / DELETE entries
 │   ├── daily-discord.js       8pm Discord post (Vercel Cron)
@@ -257,7 +280,10 @@ frift/
 │   │   ├── ActivityStrip.jsx      the last-3-weeks logged/not-logged grid
 │   │   ├── ActivityLog.jsx        recent sessions and their PRs
 │   │   ├── SheetsInfo.jsx         Google Sheets upload placeholder
-│   │   ├── ExerciseChart.jsx      one chart panel and its hover card
+│   │   ├── ChartFrame.jsx         a chart tile's header, + and expand buttons, full-screen view
+│   │   ├── LinesChart.jsx         the line chart every tile draws
+│   │   ├── ExerciseChart.jsx      a weights, reps or cardio chart and its hover card
+│   │   ├── RunningChart.jsx       the Running tile: run type, tempo distance, pace
 │   │   ├── AddEntryDialog.jsx     the + dialog for logging sets and cardio
 │   │   ├── AddExerciseTile.jsx    the "Add exercise" tile
 │   │   ├── AddExerciseDialog.jsx  dialog for creating an exercise
@@ -291,8 +317,10 @@ frift/
   |---|---|
   | `frift.passcode` | The passcode you entered. A `401` clears it and shows the passcode screen again. |
   | `frift.me` | Who you picked in A1. |
-  | `frift.mode` | `total`, `pct` or `best`. |
+  | `frift.mode` | `total`, `pct`, `best` or `bw`. |
   | `frift.equalise` | Whether Equalise is ticked. |
+  | `frift.runType` | The run type the Running tile shows. |
+  | `frift.tempoDistance` | `5k`, `10k` or `all` for the Tempo chart. |
 
   None of this is shared between people or devices.
 - **Dialogs** use the browser's built-in `<dialog>` element, so Escape closes them and focus is handled for you.

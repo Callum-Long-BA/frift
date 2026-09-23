@@ -128,3 +128,19 @@ test('discordLink opens a channel or one message', () => {
   assert.equal(discordLink('111', '222'), 'https://discord.com/channels/111/222');
   assert.equal(discordLink('111', '222', '333'), 'https://discord.com/channels/111/222/333');
 });
+
+test('runs show distance and time with the run type; assisted sets show minus weights', () => {
+  const kinds = [...exercises, { id: 'running', name: 'Running', kind: 'running' }, { id: 'pull_up', name: 'Assisted pull up', kind: 'strength' }];
+  const rows = [
+    row(1, '2026-09-15', 'running', 1, { run_type: 'tempo', distance_km: 5, duration_sec: 1500 }),
+    row(1, today, 'running', 1, { run_type: 'tempo', distance_km: 5, duration_sec: 1450 }),
+    row(1, today, 'running', 2, { run_type: 'easy', distance_km: 3.5, duration_sec: 1260 }),
+    row(1, '2026-09-15', 'pull_up', 1, { weight: -30, reps: 8 }),
+    row(1, today, 'pull_up', 1, { weight: -20, reps: 8 }),
+  ];
+  const [sam] = buildDailyMessages({ people, exercises: kinds, entries: rows, date: today });
+  assert.equal(
+    sam.payload.content,
+    'Sam worked out today ✅ -> Running (easy, tempo) [PR! 5km in 24:10 🏆, 3.5km in 21:00], Assisted pull up [PR! -20kg x 8 🏆].',
+  );
+});

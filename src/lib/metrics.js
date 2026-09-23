@@ -1,4 +1,4 @@
-import { COUNTED_SETS } from './constants.js';
+import { COUNTED_SETS, TEMPO_DISTANCES } from './constants.js';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -45,17 +45,32 @@ export function activityByPerson(entries, from, to) {
   return out;
 }
 
-// What counts as a personal record for one entry: the heaviest weight for weight x reps,
-// the most reps for reps-only, the longest time for cardio.
+// What counts as a personal record for one entry (higher is better): the heaviest weight
+// for weight x reps (for assisted sets, less assistance), the most reps for reps-only, the
+// longest time for cardio. For running: the longest easy run, and the fastest pace for
+// tempo runs and for a single interval (pace is negated so that faster counts as higher).
 function prMeasure(entry, kind) {
   if (kind === 'cardio') return entry.duration_min ?? 0;
   if (kind === 'reps') return entry.reps ?? 0;
+  if (kind === 'running') {
+    if (entry.run_type === 'easy') return entry.distance_km ?? 0;
+    return -runPace(entry.duration_sec, entry.distance_km);
+  }
   return entry.weight ?? 0;
 }
 
-// Barbell and dumbbell weights are not comparable, so each has its own records.
-// Older sets with no equipment recorded count as barbell, as they do on the charts.
-const prTrack = (entry, kind) => (kind === 'strength' ? entry.equipment ?? 'barbell' : '');
+// Records that are not comparable are kept apart. Barbell and dumbbell weights each have
+// their own (older sets with no equipment recorded count as barbell, as on the charts).
+// Each run type has its own, and tempo runs are compared only within 5K, 10K or other.
+function prTrack(entry, kind) {
+  if (kind === 'strength') return entry.equipment ?? 'barbell';
+  if (kind === 'running') {
+    if (entry.run_type !== 'tempo') return entry.run_type;
+    const bucket = TEMPO_DISTANCES.find((d) => d.km && matchesTempoDistance(entry.distance_km, d.key));
+    return `tempo-${bucket?.key ?? 'other'}`;
+  }
+  return '';
+}
 
 // One session: everything one person logged on one day, as { exerciseIds, prs, prEntryIds },
 // with exercises in the order they were logged. `prs` lists the exercises where that session
@@ -216,13 +231,31 @@ export function dailySummaries(entries, exercise, mode = 'total', { equalise = f
   return summaries;
 }
 
-// mode: 'total' | 'pct' | 'best'.
+// The body weight to divide by for one person on one day: the latest reading on or before
+// that day, or, for days before their first reading, that first reading. null if they have
+// never logged one. `bodyWeights` is [{ person_id, date, weight_kg }].
+export function bodyWeightOn(bodyWeights, personId, date) {
+  let before = null;
+  let first = null;
+  for (const b of bodyWeights) {
+    if (b.person_id !== personId) continue;
+    if (b.date <= date && (!before || b.date > before.date)) before = b;
+    if (!first || b.date < first.date) first = b;
+  }
+  return (before ?? first)?.weight_kg ?? null;
+}
+
+// mode: 'total' | 'pct' | 'best' | 'bw'.
 //   pct = % change in the total from that person's first logged day.
+//   bw  = the best set's weight divided by body weight (see bodyWeightOn), e.g. 1.25.
+//         People with no body weight logged are left out. Reps-only and cardio charts have
+//         no weight to divide, so they show the same as 'best'.
 // options.equalise: count dumbbell sets at double weight (see factorFor).
+// options.bodyWeights: [{ person_id, date, weight_kg }], needed for 'bw'.
 // Returns rows shaped for a Recharts LineChart:
 //   { t, date, p<id>: value | null, detail: { p<id>: sets } }
-export function buildChartData(entries, exercise, mode, { equalise = false } = {}) {
-  const summaries = dailySummaries(entries, exercise, mode === 'best' ? 'best' : 'total', { equalise });
+export function buildChartData(entries, exercise, mode, { equalise = false, bodyWeights = [] } = {}) {
+  const summaries = dailySummaries(entries, exercise, mode === 'best' || mode === 'bw' ? 'best' : 'total', { equalise });
   const perPerson = new Map();
   const allDates = new Set();
 
@@ -236,6 +269,14 @@ export function buildChartData(entries, exercise, mode, { equalise = false } = {
       const base = points[0].value;
       if (!(base > 0)) continue; // change from zero is undefined
       series = points.map((p) => ({ ...p, value: round1((p.value / base - 1) * 100) }));
+    } else if (mode === 'bw' && exercise.kind === 'strength') {
+      series = points
+        .map((p) => {
+          const bw = bodyWeightOn(bodyWeights, personId, p.date);
+          return bw ? { ...p, value: Math.round((p.value / bw) * 100) / 100 } : null;
+        })
+        .filter(Boolean);
+      if (series.length === 0) continue;
     }
 
     perPerson.set(personId, new Map(series.map((p) => [p.date, p])));
@@ -281,6 +322,82 @@ export function formatDayLong(t) {
 
 export function formatAmount(value, mode, kind) {
   if (mode === 'pct') return `${value > 0 ? '+' : ''}${value}%`;
+  if (mode === 'bw' && kind === 'strength') return `${value.toFixed(2)}× BW`;
   const unit = kind === 'cardio' ? 'min' : kind === 'reps' ? 'reps' : 'kg';
   return `${round1(value).toLocaleString('en-GB')} ${unit}`;
+}
+
+// ---------- Running ----------
+
+// Seconds per km.
+export function runPace(seconds, km) {
+  return km > 0 ? seconds / km : Infinity;
+}
+
+// 95 -> "1:35", 3725 -> "1:02:05".
+export function formatDuration(totalSeconds) {
+  const t = Math.round(totalSeconds);
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const sec = String(t % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+}
+
+// A pace in seconds per km as "4:50 /km".
+export const formatPace = (secondsPerKm) => `${formatDuration(secondsPerKm)} /km`;
+
+// Whether a tempo run's distance counts as the chosen 5K or 10K (within 5%). 'all' matches any.
+export function matchesTempoDistance(km, key) {
+  const target = TEMPO_DISTANCES.find((d) => d.key === key)?.km;
+  if (!target) return true;
+  return Math.abs(km - target) <= target * 0.05;
+}
+
+// Chart rows for the Running tile, for one run type, in the same shape as buildChartData:
+//   easy:      the day's total distance, km.
+//   tempo:     the day's fastest pace (seconds per km), only for runs matching tempoDistance.
+//   intervals: the day's average pace across every interval: total time / total distance.
+// detail[p<id>] lists that day's runs: [{ setNumber, distanceKm, seconds }].
+export function runningChartData(entries, runType, { tempoDistance = '5k' } = {}) {
+  const groups = new Map();
+  for (const e of entries) {
+    if (e.exercise !== 'running' || e.run_type !== runType) continue;
+    if (runType === 'tempo' && !matchesTempoDistance(e.distance_km, tempoDistance)) continue;
+    const key = `${e.person_id}|${e.date}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  }
+
+  const perPerson = new Map();
+  const allDates = new Set();
+  for (const [key, runs] of groups) {
+    const [personId, date] = key.split('|');
+    const id = Number(personId);
+    runs.sort((a, b) => a.set_number - b.set_number);
+    let value;
+    if (runType === 'easy') {
+      value = Math.round(runs.reduce((sum, r) => sum + r.distance_km, 0) * 100) / 100;
+    } else if (runType === 'tempo') {
+      value = Math.min(...runs.map((r) => runPace(r.duration_sec, r.distance_km)));
+    } else {
+      const km = runs.reduce((sum, r) => sum + r.distance_km, 0);
+      const seconds = runs.reduce((sum, r) => sum + r.duration_sec, 0);
+      value = runPace(seconds, km);
+    }
+    const detail = runs.map((r) => ({ setNumber: r.set_number, distanceKm: r.distance_km, seconds: r.duration_sec }));
+    if (!perPerson.has(id)) perPerson.set(id, new Map());
+    perPerson.get(id).set(date, { value, detail });
+    allDates.add(date);
+  }
+
+  const rows = [...allDates].sort().map((date) => {
+    const row = { t: toTimestamp(date), date, detail: {} };
+    for (const [personId, byDate] of perPerson) {
+      const point = byDate.get(date);
+      row[seriesKey(personId)] = point ? point.value : null;
+      if (point) row.detail[seriesKey(personId)] = point.detail;
+    }
+    return row;
+  });
+  return { rows, personIds: [...perPerson.keys()] };
 }

@@ -1,7 +1,8 @@
 // Building the daily Discord post. Pure functions only, so they can be tested without a
 // network or database. The endpoint that sends them is api/daily-discord.js.
 
-import { sessionSummary } from '../src/lib/metrics.js';
+import { formatDuration, sessionSummary } from '../src/lib/metrics.js';
+import { RUN_TYPES } from '../src/lib/constants.js';
 
 // The date ('YYYY-MM-DD') and hour (0-23) in the UK right now, allowing for summer time.
 export function londonNow(now = new Date()) {
@@ -43,9 +44,11 @@ export const escapeMarkdown = (text) => String(text).replace(/([\\*_~`|])/g, '\\
 
 const number = (n) => Number(n).toLocaleString('en-GB');
 
-// One set as the message shows it: "40kg x 10" (DB for dumbbells), "12 reps" or "30 min".
+// One set as the message shows it: "40kg x 10" (DB for dumbbells, minus for assisted),
+// "12 reps", "30 min", or for a run "5km in 24:10".
 function formatSet(row, kind) {
   if (kind === 'cardio') return `${number(row.duration_min)} min`;
+  if (kind === 'running') return `${number(row.distance_km)}km in ${formatDuration(row.duration_sec)}`;
   if (kind === 'reps') return `${row.reps} reps`;
   return `${number(row.weight)}kg x ${row.reps}${row.equipment === 'dumbbell' ? ' DB' : ''}`;
 }
@@ -53,7 +56,12 @@ function formatSet(row, kind) {
 // An exercise in the list: just its name, or for a PR every set in order, with the
 // record-making set marked: "Shoulder press [PR! 34kg x 10, 40kg x 10 🏆, 40kg x 10]".
 function exerciseText(exercise, rows, prEntryIds) {
-  const name = escapeMarkdown(exercise.name);
+  let name = escapeMarkdown(exercise.name);
+  // Running says which kinds of run: "Running (easy, tempo)".
+  if (exercise.kind === 'running') {
+    const types = RUN_TYPES.filter((t) => rows.some((r) => r.run_type === t));
+    if (types.length > 0) name += ` (${types.join(', ')})`;
+  }
   if (!rows.some((r) => prEntryIds.has(r.id))) return name;
   const sets = [...rows]
     .sort((a, b) => a.set_number - b.set_number)

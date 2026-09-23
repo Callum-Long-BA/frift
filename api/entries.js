@@ -26,7 +26,10 @@ export default route({
              weight::float8 as weight,
              reps,
              duration_min::float8 as duration_min,
-             equipment
+             equipment,
+             run_type,
+             distance_km::float8 as distance_km,
+             duration_sec
       from entries
       order by entry_date, set_number, id`;
   },
@@ -36,6 +39,8 @@ export default route({
   //   Set numbers continue from whatever that person already logged that day.
   //   equipment ('barbell' | 'dumbbell') is required for exercises that offer the choice.
   // Cardio:   { personId, exercise: 'cardio', date, durationMin }
+  // Running:  { personId, exercise: 'running', date, runType, runs: [{ distanceKm, seconds }] }
+  //   One run for easy and tempo, one per interval for intervals. Numbered like sets.
   async POST(req) {
     const sql = db();
     const exercises = await sql`select id, kind, equipment_choice from exercises`;
@@ -47,7 +52,31 @@ export default route({
           values (${entry.personId}::int, ${entry.exercise}::text, ${entry.date}::date, 1, ${entry.durationMin}::numeric)
           returning id, person_id, exercise,
                     to_char(entry_date, 'YYYY-MM-DD') as date,
-                    set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment`;
+                    set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment,
+                    run_type, distance_km::float8 as distance_km, duration_sec`;
+      }
+
+      if (entry.kind === 'running') {
+        const numbers = entry.runs.map((_, i) => i + 1);
+        const distances = entry.runs.map((r) => r.distanceKm);
+        const seconds = entry.runs.map((r) => r.seconds);
+        return await sql`
+          insert into entries (person_id, exercise, entry_date, set_number, run_type, distance_km, duration_sec)
+          select ${entry.personId}::int,
+                 ${entry.exercise}::text,
+                 ${entry.date}::date,
+                 (select coalesce(max(set_number), 0) from entries
+                   where person_id = ${entry.personId}::int
+                     and exercise = ${entry.exercise}::text
+                     and entry_date = ${entry.date}::date) + s.n,
+                 ${entry.runType}::text,
+                 s.d,
+                 s.t
+          from unnest(${numbers}::int[], ${distances}::numeric[], ${seconds}::int[]) as s(n, d, t)
+          returning id, person_id, exercise,
+                    to_char(entry_date, 'YYYY-MM-DD') as date,
+                    set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment,
+                    run_type, distance_km::float8 as distance_km, duration_sec`;
       }
 
       const numbers = entry.sets.map((_, i) => i + 1);
@@ -70,7 +99,8 @@ export default route({
         from unnest(${numbers}::int[], ${weights}::numeric[], ${reps}::int[]) as s(n, w, r)
         returning id, person_id, exercise,
                   to_char(entry_date, 'YYYY-MM-DD') as date,
-                  set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment`;
+                  set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment,
+                    run_type, distance_km::float8 as distance_km, duration_sec`;
     } catch (err) {
       throw translateDbError(err, entry);
     }

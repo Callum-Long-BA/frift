@@ -11,6 +11,11 @@ import {
   dayLabel,
   weekGrid,
   recentSessions,
+  bodyWeightOn,
+  runningChartData,
+  formatDuration,
+  formatPace,
+  matchesTempoDistance,
 } from '../src/lib/metrics.js';
 
 const bench = { id: 'bench_press', name: 'Bench press', kind: 'strength' };
@@ -433,4 +438,92 @@ test('only earlier days count, not other people or later days', () => {
   const entries = [set(2, '2026-09-01', 1, 100, 5), set(1, '2026-09-02', 1, 50, 5), set(1, '2026-09-04', 1, 70, 5), set(1, '2026-09-03', 1, 60, 5)];
   const byDate = new Map(recentSessions(entries, kinds, 5).filter((s) => s.personId === 1).map((s) => [s.date, s.prs]));
   assert.deepEqual(byDate.get('2026-09-03'), ['bench_press']); // beats 50 even though 70 was logged first
+});
+
+// ---------- per body weight ----------
+
+test('bodyWeightOn uses the latest reading on or before the day, else the first reading', () => {
+  const bw = [
+    { person_id: 1, date: '2026-09-05', weight_kg: 80 },
+    { person_id: 1, date: '2026-09-10', weight_kg: 82 },
+    { person_id: 2, date: '2026-09-01', weight_kg: 60 },
+  ];
+  assert.equal(bodyWeightOn(bw, 1, '2026-09-01'), 80); // before any reading: the first one
+  assert.equal(bodyWeightOn(bw, 1, '2026-09-05'), 80);
+  assert.equal(bodyWeightOn(bw, 1, '2026-09-09'), 80);
+  assert.equal(bodyWeightOn(bw, 1, '2026-09-20'), 82);
+  assert.equal(bodyWeightOn(bw, 3, '2026-09-20'), null);
+});
+
+test('× BW mode: best set weight divided by body weight; people with no body weight are left out', () => {
+  const entries = [set(1, '2026-09-01', 1, 100, 8), set(1, '2026-09-01', 2, 90, 5), set(2, '2026-09-01', 1, 60, 5)];
+  const bodyWeights = [{ person_id: 1, date: '2026-09-01', weight_kg: 80 }];
+  const { rows, personIds } = buildChartData(entries, bench, 'bw', { bodyWeights });
+  assert.deepEqual(personIds, [1]);
+  assert.equal(rows[0][seriesKey(1)], 1.25); // best set 100 x 8, divided by 80 kg
+});
+
+test('assisted sets: less assistance is the better set and the PR', () => {
+  const entries = [set(1, '2026-09-01', 1, -30, 8), set(1, '2026-09-03', 1, -20, 8)];
+  assert.equal(value(entries, bench, 1, '2026-09-03', 'best'), -20);
+  const byDate = new Map(recentSessions(entries, kinds, 5).map((s) => [s.date, s.prs]));
+  assert.deepEqual(byDate.get('2026-09-03'), ['bench_press']);
+});
+
+// ---------- running ----------
+
+const running = { id: 'running', name: 'Running', kind: 'running' };
+const runRow = (person_id, date, set_number, run_type, distance_km, duration_sec) => ({
+  id: nextId++, person_id, exercise: 'running', date, set_number, run_type, distance_km, duration_sec,
+  weight: null, reps: null, duration_min: null, equipment: null,
+});
+
+test('formatDuration and formatPace', () => {
+  assert.equal(formatDuration(95), '1:35');
+  assert.equal(formatDuration(3725), '1:02:05');
+  assert.equal(formatPace(290), '4:50 /km');
+});
+
+test('easy runs chart total distance per day', () => {
+  const entries = [runRow(1, '2026-09-01', 1, 'easy', 5, 1800), runRow(1, '2026-09-01', 2, 'easy', 3.2, 1200), runRow(1, '2026-09-01', 3, 'tempo', 5, 1400)];
+  const { rows } = runningChartData(entries, 'easy');
+  assert.equal(rows[0][seriesKey(1)], 8.2);
+  assert.equal(rows[0].detail[seriesKey(1)].length, 2);
+});
+
+test('tempo runs chart the best pace, for the chosen distance only', () => {
+  const entries = [
+    runRow(1, '2026-09-01', 1, 'tempo', 5, 1500), // 300 s/km
+    runRow(1, '2026-09-01', 2, 'tempo', 5, 1450), // 290 s/km
+    runRow(1, '2026-09-02', 1, 'tempo', 10, 3100), // 10K
+  ];
+  const fiveK = runningChartData(entries, 'tempo', { tempoDistance: '5k' });
+  assert.deepEqual(fiveK.rows.map((r) => r.date), ['2026-09-01']);
+  assert.equal(fiveK.rows[0][seriesKey(1)], 290);
+  assert.deepEqual(runningChartData(entries, 'tempo', { tempoDistance: '10k' }).rows.map((r) => r.date), ['2026-09-02']);
+  assert.equal(runningChartData(entries, 'tempo', { tempoDistance: 'all' }).rows.length, 2);
+  assert.equal(matchesTempoDistance(5.2, '5k'), true); // within 5%
+  assert.equal(matchesTempoDistance(4.7, '5k'), false);
+  assert.equal(matchesTempoDistance(10.4, '10k'), true);
+});
+
+test('intervals chart average pace: total time over total distance', () => {
+  const entries = [runRow(1, '2026-09-01', 1, 'intervals', 0.5, 90), runRow(1, '2026-09-01', 2, 'intervals', 1, 210)];
+  const { rows } = runningChartData(entries, 'intervals');
+  assert.equal(rows[0][seriesKey(1)], 200); // 300 s over 1.5 km
+});
+
+test('running PRs: longest easy run, fastest tempo pace within the same distance', () => {
+  const entries = [
+    runRow(1, '2026-09-01', 1, 'tempo', 5, 1500),
+    runRow(1, '2026-09-02', 1, 'tempo', 10, 3200), // first 10K: no PR, and not compared with 5K
+    runRow(1, '2026-09-03', 1, 'tempo', 5, 1450), // faster 5K: PR
+    runRow(1, '2026-09-04', 1, 'easy', 6, 2400),
+    runRow(1, '2026-09-05', 1, 'easy', 5, 1800), // shorter: no PR
+  ];
+  const kindsWithRun = [...kinds, running];
+  const prs = new Map(recentSessions(entries, kindsWithRun, 10).map((s) => [s.date, s.prs]));
+  assert.deepEqual(prs.get('2026-09-02'), []);
+  assert.deepEqual(prs.get('2026-09-03'), ['running']);
+  assert.deepEqual(prs.get('2026-09-05'), []);
 });

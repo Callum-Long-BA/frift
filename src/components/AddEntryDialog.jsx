@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { COUNTED_SETS, MAX_SETS_PER_ENTRY } from '../lib/constants.js';
+import { COUNTED_SETS, MAX_SETS_PER_ENTRY, MAX_WEIGHT, MIN_WEIGHT, RUN_TYPES, RUN_TYPE_LABELS } from '../lib/constants.js';
 import { nextSetNumber, todayString } from '../lib/metrics.js';
+import { runText } from './RunningChart.jsx';
 
-export default function AddEntryDialog({ exercise, person, entries, onClose, onSaved, onDeleted }) {
+const EMPTY_RUN = { km: '', min: '', sec: '' };
+
+// `runType` is the run type the Running tile was showing, used as the starting choice.
+export default function AddEntryDialog({ exercise, person, entries, runType: initialRunType = 'easy', onClose, onSaved, onDeleted }) {
   const dialogRef = useRef(null);
   const [date, setDate] = useState(() => todayString());
   const [sets, setSets] = useState([{ weight: '', reps: '' }]);
@@ -11,8 +15,12 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const isCardio = exercise.kind === 'cardio';
+  const isRunning = exercise.kind === 'running';
   const repsOnly = exercise.kind === 'reps';
-  const hasEquipment = exercise.equipment_choice === true && !isCardio && !repsOnly;
+  const hasEquipment = exercise.kind === 'strength' && exercise.equipment_choice === true;
+  const [runType, setRunType] = useState(initialRunType);
+  const [runs, setRuns] = useState([EMPTY_RUN]);
+  const isIntervals = runType === 'intervals';
 
   // Start on whatever this person used last time for this exercise, else barbell.
   const [equipment, setEquipment] = useState(() => {
@@ -54,6 +62,16 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
     setSets((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function updateRun(index, patch) {
+    setRuns((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  }
+
+  function changeRunType(next) {
+    setRunType(next);
+    // Easy and tempo are one run; keep only the first row when leaving intervals.
+    if (next !== 'intervals') setRuns((prev) => prev.slice(0, 1));
+  }
+
   async function submit(event) {
     event.preventDefault();
     setError('');
@@ -66,13 +84,41 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
         return;
       }
       payload = { personId: person.id, exercise: exercise.id, date, durationMin };
+    } else if (isRunning) {
+      const parsed = [];
+      for (let i = 0; i < runs.length; i++) {
+        const { km, min, sec } = runs[i];
+        const fail = (text) => setError(isIntervals ? `Interval ${i + 1}: ${text}` : text[0].toUpperCase() + text.slice(1));
+        const distanceKm = Number(km);
+        if (km === '' || !(distanceKm > 0)) {
+          fail('enter the distance in km.');
+          return;
+        }
+        const minutesPart = min === '' ? 0 : Number(min);
+        const secondsPart = sec === '' ? 0 : Number(sec);
+        if (!Number.isInteger(minutesPart) || minutesPart < 0 || !Number.isInteger(secondsPart) || secondsPart < 0 || secondsPart > 59) {
+          fail('enter the time as whole minutes and 0 to 59 seconds.');
+          return;
+        }
+        const seconds = minutesPart * 60 + secondsPart;
+        if (seconds < 1) {
+          fail('enter the time it took.');
+          return;
+        }
+        parsed.push({ distanceKm, seconds });
+      }
+      payload = { personId: person.id, exercise: exercise.id, date, runType, runs: parsed };
     } else {
       const parsed = [];
       for (let i = 0; i < sets.length; i++) {
         const { weight, reps } = sets[i];
         const label = `Set ${firstNewSet + i}`;
-        if (!repsOnly && (weight === '' || Number.isNaN(Number(weight)) || Number(weight) < 0)) {
-          setError(`${label}: enter a weight in kg.`);
+        if (!repsOnly && (weight === '' || Number.isNaN(Number(weight)))) {
+          setError(`${label}: enter a weight in kg (minus for assisted).`);
+          return;
+        }
+        if (!repsOnly && (Number(weight) < MIN_WEIGHT || Number(weight) > MAX_WEIGHT)) {
+          setError(`${label}: weight must be between ${MIN_WEIGHT} and ${MAX_WEIGHT} kg.`);
           return;
         }
         if (reps === '' || !Number.isInteger(Number(reps)) || Number(reps) < 1) {
@@ -106,9 +152,10 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
     }
   }
 
-  const submitLabel = isCardio
-    ? 'Save cardio'
-    : `Save ${sets.length} ${sets.length === 1 ? 'set' : 'sets'}`;
+  let submitLabel;
+  if (isCardio) submitLabel = 'Save cardio';
+  else if (isRunning) submitLabel = isIntervals ? `Save ${runs.length} ${runs.length === 1 ? 'interval' : 'intervals'}` : 'Save run';
+  else submitLabel = `Save ${sets.length} ${sets.length === 1 ? 'set' : 'sets'}`;
 
   return (
     <dialog
@@ -173,7 +220,99 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
           </fieldset>
         )}
 
-        {isCardio ? (
+        {isRunning && (
+          <fieldset className="runs" disabled={busy}>
+            <legend>Run type</legend>
+            <div className="equipment run-types">
+              {RUN_TYPES.map((t) => (
+                <label key={t}>
+                  <input type="radio" name="runType" value={t} checked={runType === t} onChange={() => changeRunType(t)} />
+                  {RUN_TYPE_LABELS[t]}
+                </label>
+              ))}
+            </div>
+
+            {runType === 'tempo' && (
+              <div className="quick-distances">
+                <span className="hint">Distance:</span>
+                {[5, 10].map((d) => (
+                  <button key={d} type="button" className="chip" aria-pressed={runs[0].km === String(d)} onClick={() => updateRun(0, { km: String(d) })}>
+                    {d} km
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {runs.map((r, i) => (
+              <div className="run-row" key={i}>
+                <span className="set-label">{isIntervals ? `Interval ${i + 1}` : 'Run'}</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0.01"
+                  max="200"
+                  step="0.01"
+                  placeholder="km"
+                  aria-label={`${isIntervals ? `Interval ${i + 1}` : 'Run'} distance in km`}
+                  value={r.km}
+                  onChange={(e) => updateRun(i, { km: e.target.value })}
+                />
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  step="1"
+                  placeholder="min"
+                  aria-label={`${isIntervals ? `Interval ${i + 1}` : 'Run'} time, minutes`}
+                  value={r.min}
+                  onChange={(e) => updateRun(i, { min: e.target.value })}
+                />
+                <span className="times" aria-hidden="true">
+                  :
+                </span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  max="59"
+                  step="1"
+                  placeholder="sec"
+                  aria-label={`${isIntervals ? `Interval ${i + 1}` : 'Run'} time, seconds`}
+                  value={r.sec}
+                  onChange={(e) => updateRun(i, { sec: e.target.value })}
+                />
+                {isIntervals && (
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={`Remove interval ${i + 1}`}
+                    disabled={runs.length === 1}
+                    onClick={() => setRuns((prev) => prev.filter((_, j) => j !== i))}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+            {isIntervals && (
+              <button
+                type="button"
+                className="text-btn"
+                disabled={runs.length >= MAX_SETS_PER_ENTRY}
+                onClick={() => setRuns((prev) => [...prev, { ...prev[prev.length - 1] }])}
+              >
+                Add another interval
+              </button>
+            )}
+            <p className="hint">
+              {runType === 'easy' && 'Easy runs are charted by distance.'}
+              {runType === 'tempo' && 'Tempo runs are charted by pace, at 5K, 10K or all distances.'}
+              {isIntervals && 'Enter each interval’s distance and time. Charted by average pace.'}
+            </p>
+          </fieldset>
+        )}
+
+        {isRunning ? null : isCardio ? (
           <div className="field">
             <label htmlFor="minutes">Duration in minutes</label>
             <input
@@ -203,8 +342,8 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
                       <input
                         type="number"
                         inputMode="decimal"
-                        min="0"
-                        max="1000"
+                        min={MIN_WEIGHT}
+                        max={MAX_WEIGHT}
                         step="0.5"
                         placeholder={isDumbbell ? 'kg each' : 'kg'}
                         aria-label={`Set ${n} weight in kilograms${isDumbbell ? ', per dumbbell' : ''}`}
@@ -242,7 +381,10 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
             <button type="button" className="text-btn" disabled={sets.length >= MAX_SETS_PER_ENTRY} onClick={addSet}>
               Add another set
             </button>
-            <p className="hint">Only the last {COUNTED_SETS} sets of the day count toward the chart.</p>
+            <p className="hint">
+              Only the last {COUNTED_SETS} sets of the day count toward the chart.
+              {!repsOnly && ' Assisted? Enter the assistance as a minus weight, e.g. -20.'}
+            </p>
           </fieldset>
         )}
 
@@ -255,11 +397,13 @@ export default function AddEntryDialog({ exercise, person, entries, onClose, onS
                   <span>
                     {isCardio
                       ? `${row.duration_min} min`
-                      : row.weight === null
+                      : isRunning
+                        ? `${RUN_TYPE_LABELS[row.run_type]}: ${runText({ distanceKm: row.distance_km, seconds: row.duration_sec })}`
+                        : row.weight === null
                         ? `Set ${row.set_number}: ${row.reps} reps`
                         : `Set ${row.set_number}: ${row.weight} kg × ${row.reps}${row.equipment ? `, ${row.equipment}` : ''}`}
                   </span>
-                  {!isCardio && countedIds.has(row.id) && <span className="tag">counts</span>}
+                  {!isCardio && !isRunning && countedIds.has(row.id) && <span className="tag">counts</span>}
                   <button type="button" className="text-btn danger" onClick={() => remove(row)}>
                     Delete
                   </button>

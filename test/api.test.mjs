@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { route, HttpError } from '../api/_http.js';
-import { parseDate, parseExerciseName, parseName, parseNewEntry, slugify } from '../api/_validate.js';
+import { parseBodyWeight, parseDate, parseExerciseName, parseName, parseNewEntry, slugify } from '../api/_validate.js';
 
 process.env.FRIFT_PASSCODE = 'secret-lift';
 
@@ -79,6 +79,7 @@ const exercises = [
   { id: 'romanian_deadlift', kind: 'strength', equipment_choice: false },
   { id: 'cardio', kind: 'cardio', equipment_choice: false },
   { id: 'pull_ups', kind: 'reps', equipment_choice: false },
+  { id: 'running', kind: 'running', equipment_choice: false },
 ];
 const base = { personId: 1, exercise: 'bench_press', date: '2026-09-19' };
 
@@ -93,7 +94,7 @@ test('parseNewEntry rejects blanks, fractions, negatives and bad shapes', () => 
     { ...base, sets: [{ weight: '', reps: 8 }] },
     { ...base, sets: [{ weight: 60, reps: '' }] },
     { ...base, sets: [{ weight: 60, reps: 7.5 }] },
-    { ...base, sets: [{ weight: -5, reps: 8 }] },
+    { ...base, sets: [{ weight: -501, reps: 8 }] },
     { ...base, sets: [] },
     { ...base, sets: Array.from({ length: 11 }, () => ({ weight: 60, reps: 8 })) },
     { ...base, exercise: 'deadlift', sets: [{ weight: 60, reps: 8 }] },
@@ -169,5 +170,41 @@ test('reps-only exercises take reps alone and store no weight or equipment', () 
 test('reps-only exercises still reject bad reps', () => {
   for (const r of ['', 0, 7.5, 201, 'abc']) {
     assert.throws(() => parseNewEntry({ ...pullups, sets: [{ reps: r }] }, exercises, now), HttpError);
+  }
+});
+
+test('assisted sets: negative weights down to -500 kg are accepted', () => {
+  const e = parseNewEntry({ ...base, sets: [{ weight: -20, reps: 8 }, { weight: '-500', reps: 5 }] }, exercises, now);
+  assert.deepEqual(e.sets, [{ weight: -20, reps: 8 }, { weight: -500, reps: 5 }]);
+  assert.throws(() => parseNewEntry({ ...base, sets: [{ weight: -500.5, reps: 8 }] }, exercises, now), HttpError);
+});
+
+const run = { personId: 1, exercise: 'running', date: '2026-09-19' };
+
+test('running: easy and tempo take one run; intervals take several', () => {
+  const easy = parseNewEntry({ ...run, runType: 'easy', runs: [{ distanceKm: '5.234', seconds: 1800 }] }, exercises, now);
+  assert.deepEqual(easy, { kind: 'running', personId: 1, exercise: 'running', date: '2026-09-19', runType: 'easy', runs: [{ distanceKm: 5.23, seconds: 1800 }] });
+  const intervals = parseNewEntry({ ...run, runType: 'intervals', runs: [{ distanceKm: 0.4, seconds: 90 }, { distanceKm: 0.4, seconds: 88 }] }, exercises, now);
+  assert.equal(intervals.runs.length, 2);
+  assert.throws(() => parseNewEntry({ ...run, runType: 'tempo', runs: [{ distanceKm: 5, seconds: 1500 }, { distanceKm: 5, seconds: 1500 }] }, exercises, now), /one run/);
+});
+
+test('running: rejects bad run types, distances and times', () => {
+  const bad = [
+    { ...run, runType: 'sprint', runs: [{ distanceKm: 5, seconds: 1500 }] },
+    { ...run, runType: 'easy', runs: [] },
+    { ...run, runType: 'easy', runs: [{ distanceKm: 0, seconds: 1500 }] },
+    { ...run, runType: 'easy', runs: [{ distanceKm: 201, seconds: 1500 }] },
+    { ...run, runType: 'easy', runs: [{ distanceKm: 5, seconds: 0 }] },
+    { ...run, runType: 'easy', runs: [{ distanceKm: 5, seconds: 90.5 }] },
+    { ...run, runType: 'easy', runs: [{ distanceKm: 5, seconds: '' }] },
+  ];
+  for (const body of bad) assert.throws(() => parseNewEntry(body, exercises, now), HttpError);
+});
+
+test('parseBodyWeight keeps one decimal and checks the range', () => {
+  assert.deepEqual(parseBodyWeight({ personId: 1, date: '2026-09-19', weightKg: '80.26' }, now), { personId: 1, date: '2026-09-19', weightKg: 80.3 });
+  for (const weightKg of ['', 19.9, 400.1, 'abc']) {
+    assert.throws(() => parseBodyWeight({ personId: 1, date: '2026-09-19', weightKg }, now), HttpError);
   }
 });
