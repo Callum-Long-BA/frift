@@ -393,16 +393,25 @@ test('dayLabel is short and readable', () => {
 
 const kinds = [bench, cardio, { id: 'pull_ups', name: 'Pull ups', kind: 'reps' }];
 
-test('recentSessions groups by person and day, newest logged first, and caps the count', () => {
+test('recentSessions groups by person and day, newest date first, and caps the count', () => {
   const entries = [
     set(1, '2026-09-01', 1, 60, 8),
     set(2, '2026-09-02', 1, 40, 8),
-    run(1, '2026-09-01', 20), // logged after person 2, so person 1's session is newest
+    run(1, '2026-09-01', 20), // logged last, but its date is earlier, so it stays second
   ];
   const sessions = recentSessions(entries, kinds, 5);
-  assert.deepEqual(sessions.map((s) => [s.personId, s.date]), [[1, '2026-09-01'], [2, '2026-09-02']]);
-  assert.deepEqual(sessions[0].exerciseIds, ['bench_press', 'cardio']);
+  assert.deepEqual(sessions.map((s) => [s.personId, s.date]), [[2, '2026-09-02'], [1, '2026-09-01']]);
+  assert.deepEqual(sessions[1].exerciseIds, ['bench_press', 'cardio']);
   assert.equal(recentSessions(entries, kinds, 1).length, 1);
+});
+
+test('recentSessions: a backdated session slots in by its date; same-date sessions go most recently logged first', () => {
+  const entries = [
+    set(1, '2026-09-10', 1, 60, 8),
+    set(2, '2026-09-10', 1, 40, 8), // same date, logged after person 1
+    set(3, '2026-08-01', 1, 50, 8), // logged last, but for August
+  ];
+  assert.deepEqual(recentSessions(entries, kinds, 5).map((s) => s.personId), [2, 1, 3]);
 });
 
 test('a PR is a heavier top weight than any earlier session; the first session is not a PR', () => {

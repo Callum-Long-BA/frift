@@ -110,8 +110,9 @@ export function sessionSummary(entries, exercises, personId, date) {
   return { exerciseIds, prs, prEntryIds };
 }
 
-// The most recent sessions (one person, one day), newest logged first, for the activity log.
-// "Newest" is by when it was logged (highest entry id), not by the date it was for.
+// The most recent sessions (one person, one day) for the activity log, by the date the
+// session was for, newest first. Sessions on the same date put the one logged most recently
+// (highest entry id) first, so a backdated entry slots in by its date, not when it was typed.
 // Returns [{ personId, date, exerciseIds, prs }] (see sessionSummary).
 export function recentSessions(entries, exercises, limit = 5) {
   const sessions = new Map();
@@ -122,7 +123,9 @@ export function recentSessions(entries, exercises, limit = 5) {
     sessions.set(key, s);
   }
 
-  const recent = [...sessions.values()].sort((a, b) => b.latest - a.latest).slice(0, limit);
+  const recent = [...sessions.values()]
+    .sort((a, b) => (a.date === b.date ? b.latest - a.latest : a.date < b.date ? 1 : -1))
+    .slice(0, limit);
 
   return recent.map((s) => ({ personId: s.personId, date: s.date, ...sessionSummary(entries, exercises, s.personId, s.date) }));
 }
