@@ -6,7 +6,7 @@
 export const COUNTED_SETS = 3;
 
 export const MAX_PEOPLE = 10;
-export const MAX_EXERCISES = 25;
+export const MAX_EXERCISES = 30;
 export const MAX_EXERCISE_NAME = 30;
 export const MAX_SETS_PER_ENTRY = 10;
 
