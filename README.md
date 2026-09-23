@@ -20,8 +20,9 @@ Live at **https://frift.callumlong.com**.
 10. [Deploying changes](#deploying-changes)
 11. [Local development and tests](#local-development-and-tests)
 12. [Operations cookbook (SQL)](#operations-cookbook-sql)
-13. [Security and limits](#security-and-limits)
-14. [Troubleshooting](#troubleshooting)
+13. [Daily Discord post](#daily-discord-post)
+14. [Security and limits](#security-and-limits)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -38,6 +39,7 @@ Live at **https://frift.callumlong.com**.
 - **Last 3 weeks.** The second section of A1, with nothing to scroll. One row per person, one box per day, for the current week plus the two before it (`ACTIVITY_WEEKS` in `src/lib/constants.js`). Newest first: the current week comes first, each week runs Sunday back to Monday, and each week is labelled with its Monday's date. A filled box in that person's colour means they logged a set or cardio session that day; hovering it names what. Days later in the current week show as dashed, empty boxes. Today's column is outlined all the way down every row. The rows shrink evenly when there are too many people to fit at full size, the boxes stretch to fit the width, and when it is narrow the names shorten to their first three letters (hover for the full name).
 - **Activity log.** The third section of A1: the last 5 sessions logged (one person, one day), newest first, with the exercises done. The line below says how many PRs that session set, with a 🏆 and the exercise names. A PR means the session's best beat every earlier session of that exercise by that person: the heaviest weight for weight × reps (barbell and dumbbell counted separately), the most reps in a set for reps-only, and the longest time for cardio. The first ever session of an exercise sets a baseline rather than a PR.
 - **Google Sheets upload.** The fourth section of A1 is a placeholder for instructions on logging sets automatically from a Google Sheet, coming in a later version.
+- **Daily Discord post.** At 8pm UK time, FRIFT posts to the group's Discord channel: one message per person who logged anything that day, listing their exercises and showing the sets of any PR with a 🏆. See [Daily Discord post](#daily-discord-post).
 - **Dark only.** The app is always dark. Each person's stored colour is shown as a lighter twin, so lines stay easy to read on a dark background; the database still stores the original colour.
 - **Cardio.** Logged as minutes, one entry per person per day.
 - **Shared passcode.** Everyone types one group passcode to get in.
@@ -128,6 +130,8 @@ Set in Vercel: project > Settings > Environment Variables.
 | `DATABASE_URL` | Yes | Neon connection string, including the password. Treat as a secret. |
 | `FRIFT_PASSCODE` | Yes | The shared group passcode. Treat as a secret. |
 | `POSTGRES_URL` | No | Older name for the database URL. Used only if `DATABASE_URL` is missing. |
+| `DISCORD_WEBHOOK_URL` | For the Discord post | The #fitness channel's webhook URL. Anyone with it can post in that channel, so treat it as a secret. |
+| `CRON_SECRET` | For the Discord post | Any long random string. Vercel sends it with its scheduled calls, and the endpoint only accepts them if it matches. Treat as a secret. |
 
 Other variables the Neon integration created (`DATABASE_URL_UNPOOLED`, `PG...`) are **not used** by the app. Do not rename these with a `VITE_` prefix: in a Vite project, anything starting with `VITE_` is sent to the browser.
 
@@ -199,6 +203,7 @@ All endpoints live under `/api`, take and return JSON, and are never cached.
 | `GET /api/people` | All people: `id`, `name`, `colour`. |
 | `POST /api/people` | Add a person. Body: `{ "name": "Sam" }`. The colour is assigned automatically. Fails with `409` if the name is taken or 10 people already exist. |
 | `GET /api/exercises` | All exercises in chart order: `id`, `name`, `kind`, `equipment_choice`, `created_by`, `sort_order`. |
+| `GET /api/daily-discord` | Post a day's entries to Discord now and return `{ date, posted }`. Defaults to today (UK time); add `?date=2026-09-22` for another day. Vercel Cron calls it at 8pm with `CRON_SECRET` instead of the passcode. |
 | `POST /api/exercises` | Add an exercise. Body: `{ "name": "Romanian deadlift", "personId": 1, "kind": "strength", "equipmentChoice": true }`. `kind` is `strength` (weight × reps, the default) or `reps` (reps only; `equipmentChoice` is ignored). Fails with `409` if the name exists or 20 exercises exist. |
 | `GET /api/entries` | Every logged set, oldest first: `id`, `person_id`, `exercise`, `date` (`YYYY-MM-DD`), `set_number`, `weight`, `reps`, `duration_min`, `equipment`. |
 | `POST /api/entries` | Log sets (see below). Returns the rows created. |
@@ -237,7 +242,9 @@ frift/
 │   ├── people.js              GET / POST people
 │   ├── exercises.js           GET / POST exercises
 │   ├── entries.js             GET / POST / DELETE entries
-│   ├── _http.js               passcode check, method routing, JSON errors
+│   ├── daily-discord.js       8pm Discord post (Vercel Cron)
+│   ├── _http.js               passcode and cron checks, method routing, JSON errors
+│   ├── _discord.js            builds the Discord messages
 │   ├── _db.js                 Neon connection (reads DATABASE_URL)
 │   └── _validate.js           input checking and exercise-name slugs
 ├── src/                       the React app
@@ -262,6 +269,7 @@ frift/
 │       ├── metrics.js         all chart calculations
 │       └── storage.js         safe localStorage helpers
 ├── test/                      unit tests (49)
+├── vercel.json                schedule for the Discord post
 ├── schema.sql                 database setup and upgrades (safe to re-run)
 ├── index.html                 page shell and fonts
 ├── vite.config.js
@@ -412,10 +420,32 @@ You should see two rows: `entries / equipment` and `exercises / equipment_choice
 
 ---
 
+## Daily Discord post
+
+At **8pm UK time** every day, FRIFT posts to the group's Discord channel: **one message per person** who logged anything that day, in the order people joined. Each is one line listing their exercises in the order they logged them, for example:
+
+> Sam worked out today ✅ -> Bench press, Squat, Shoulder press [PR! 34kg x 10, 40kg x 10 🏆, 40kg x 10], Seated row.
+
+An exercise where they hit a PR is followed by all its sets in brackets, with 🏆 on the set that made the record (the first to reach the day's best). PRs use the same rule as the activity log. Reps-only sets show as `12 reps`, cardio as `30 min`, and `DB` marks dumbbell sets. If no one logged anything, nothing is posted. Entries count toward the day they were logged **for**, so a set added after 8pm (or for an earlier date) is not posted.
+
+**Timing.** Vercel schedules are in UTC, so `vercel.json` calls the endpoint at both 19:00 and 20:00 UTC, and only the call that falls in the 8pm hour in London posts. That keeps it at 8pm through summer and winter time. On Vercel's free Hobby plan a scheduled call can arrive any time within its hour, so the post can land between 8:00 and 8:59pm. Each posted day is recorded in the `discord_posts` table, so a repeated call cannot post twice.
+
+**Setting it up:**
+
+1. Run the latest `schema.sql` in Neon (it adds the `discord_posts` table).
+2. In Discord: open **#fitness** > **Edit Channel** > **Integrations** > **Webhooks** > **New Webhook**. Name it FRIFT, then **Copy Webhook URL**. You need the Manage Webhooks permission on the server.
+3. In Vercel > Settings > Environment Variables, add `DISCORD_WEBHOOK_URL` (that URL) and `CRON_SECRET` (any long random string), then redeploy.
+4. To test without waiting for 8pm, open the browser console on the live site and run the line below. It posts today's messages straight away and does not stop the 8pm post.
+   `fetch('/api/daily-discord', { headers: { 'x-frift-passcode': localStorage.getItem('frift.passcode') } }).then(r => r.json()).then(console.log)`
+
+Each run's result is in Vercel > Logs (search for "Discord post").
+
+---
+
 ## Security and limits
 
 - **The passcode is the only lock.** It stops strangers using the app or filling the database. The "who are you" dropdown is **not** a login: anyone with the passcode can log as anyone. That is fine for friends, but do not treat it as security.
-- **Secrets stay on the server.** `DATABASE_URL` and `FRIFT_PASSCODE` are only read by the API functions and are never sent to the browser. In Vercel, mark both as **Sensitive** if the option is offered.
+- **Secrets stay on the server.** `DATABASE_URL`, `FRIFT_PASSCODE`, `CRON_SECRET` and `DISCORD_WEBHOOK_URL` are only read by the API functions and are never sent to the browser. In Vercel, mark both as **Sensitive** if the option is offered.
 - **The browser never talks to the database directly.** Every read and write goes through a function that checks the passcode and validates the input.
 - **The passcode is saved in the browser** so people don't retype it. Anyone using the same browser profile is treated as having it.
 - **Limits:** 10 people, 20 exercises, 10 sets per save, weights in kg.

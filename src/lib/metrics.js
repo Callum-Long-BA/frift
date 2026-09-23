@@ -57,47 +57,59 @@ function prMeasure(entry, kind) {
 // Older sets with no equipment recorded count as barbell, as they do on the charts.
 const prTrack = (entry, kind) => (kind === 'strength' ? entry.equipment ?? 'barbell' : '');
 
+// One session: everything one person logged on one day, as { exerciseIds, prs, prEntryIds },
+// with exercises in the order they were logged. `prs` lists the exercises where that session
+// beat every earlier session by that person (see prMeasure). A first ever session of an
+// exercise sets a baseline, not a record. `prEntryIds` holds the set that made each record:
+// the first set (by set number) to reach the session's best. Used by the activity log and
+// the Discord post.
+export function sessionSummary(entries, exercises, personId, date) {
+  const kindOf = new Map(exercises.map((e) => [e.id, e.kind]));
+  const rows = entries.filter((e) => e.person_id === personId && e.date === date).sort((a, b) => a.id - b.id);
+  const exerciseIds = [...new Set(rows.map((r) => r.exercise))];
+  const prEntryIds = new Set();
+  const prs = exerciseIds.filter((exerciseId) => {
+    const kind = kindOf.get(exerciseId) ?? 'strength';
+    const best = new Map(); // track -> the set with this session's best
+    for (const r of [...rows].sort((a, b) => a.set_number - b.set_number)) {
+      if (r.exercise !== exerciseId) continue;
+      const track = prTrack(r, kind);
+      const held = best.get(track);
+      if (!held || prMeasure(r, kind) > prMeasure(held, kind)) best.set(track, r);
+    }
+    let isPr = false;
+    for (const [track, top] of best) {
+      let before = -Infinity;
+      for (const e of entries) {
+        if (e.person_id === personId && e.exercise === exerciseId && e.date < date && prTrack(e, kind) === track) {
+          before = Math.max(before, prMeasure(e, kind));
+        }
+      }
+      if (before > -Infinity && prMeasure(top, kind) > before) {
+        isPr = true;
+        prEntryIds.add(top.id);
+      }
+    }
+    return isPr;
+  });
+  return { exerciseIds, prs, prEntryIds };
+}
+
 // The most recent sessions (one person, one day), newest logged first, for the activity log.
 // "Newest" is by when it was logged (highest entry id), not by the date it was for.
-// Returns [{ personId, date, exerciseIds, prs }]. `prs` lists the exercises where that
-// session beat every earlier session by that person (see prMeasure). A first ever session
-// of an exercise sets a baseline, not a record.
+// Returns [{ personId, date, exerciseIds, prs }] (see sessionSummary).
 export function recentSessions(entries, exercises, limit = 5) {
-  const kindOf = new Map(exercises.map((e) => [e.id, e.kind]));
   const sessions = new Map();
   for (const e of entries) {
     const key = `${e.person_id}|${e.date}`;
-    const s = sessions.get(key) ?? { personId: e.person_id, date: e.date, latest: 0, rows: [] };
+    const s = sessions.get(key) ?? { personId: e.person_id, date: e.date, latest: 0 };
     s.latest = Math.max(s.latest, e.id);
-    s.rows.push(e);
     sessions.set(key, s);
   }
 
   const recent = [...sessions.values()].sort((a, b) => b.latest - a.latest).slice(0, limit);
 
-  return recent.map((s) => {
-    const rows = [...s.rows].sort((a, b) => a.id - b.id);
-    const exerciseIds = [...new Set(rows.map((r) => r.exercise))];
-    const prs = exerciseIds.filter((exerciseId) => {
-      const kind = kindOf.get(exerciseId) ?? 'strength';
-      const best = new Map(); // track -> this session's best
-      for (const r of rows) {
-        if (r.exercise !== exerciseId) continue;
-        const track = prTrack(r, kind);
-        best.set(track, Math.max(best.get(track) ?? -Infinity, prMeasure(r, kind)));
-      }
-      return [...best].some(([track, top]) => {
-        let before = -Infinity;
-        for (const e of entries) {
-          if (e.person_id === s.personId && e.exercise === exerciseId && e.date < s.date && prTrack(e, kind) === track) {
-            before = Math.max(before, prMeasure(e, kind));
-          }
-        }
-        return before > -Infinity && top > before;
-      });
-    });
-    return { personId: s.personId, date: s.date, exerciseIds, prs };
-  });
+  return recent.map((s) => ({ personId: s.personId, date: s.date, ...sessionSummary(entries, exercises, s.personId, s.date) }));
 }
 
 export function dayLabel(date) {
