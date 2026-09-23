@@ -18,8 +18,27 @@ export const EQUIPMENT = ['barbell', 'dumbbell'];
 // 'cardio' also exists, but only the built-in Cardio exercise uses it.
 export const ADDABLE_KINDS = ['strength', 'reps'];
 
-// What the charts can show: total weight, % change, or best single set.
-export const MODES = ['total', 'pct', 'best'];
+// What the charts can show: total weight, % change, best single set, or best set as a
+// multiple of body weight.
+export const MODES = ['total', 'pct', 'best', 'bw'];
+
+// Weight limits for one set. Below zero is an assisted set: the assistance, as minus kg.
+export const MIN_WEIGHT = -500;
+export const MAX_WEIGHT = 1000;
+
+// The Running tile's run types. Easy charts distance; tempo and intervals chart pace.
+export const RUN_TYPES = ['easy', 'tempo', 'intervals'];
+export const RUN_TYPE_LABELS = { easy: 'Easy', tempo: 'Tempo', intervals: 'Intervals' };
+
+// Tempo runs are charted for one distance at a time. A run counts as 5K or 10K if it is
+// within 5% of it; "All" shows every tempo run.
+export const TEMPO_DISTANCES = [
+  { key: '5k', label: '5K', km: 5 },
+  { key: '10k', label: '10K', km: 10 },
+  { key: 'all', label: 'All', km: null },
+];
+export const MAX_RUN_KM = 200;
+export const MAX_RUN_SECONDS = 24 * 60 * 60;
 
 // Handed out in order as people join. The `light` value is what gets stored against a
 // person in the database; `dark` is the lighter twin actually shown, since the app is dark

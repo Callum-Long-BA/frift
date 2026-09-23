@@ -15,7 +15,7 @@ create unique index if not exists people_name_unique on people (lower(name));
 create table if not exists exercises (
   id         text primary key,                      -- slug, e.g. 'bench_press'
   name       text not null,
-  kind       text not null default 'strength' check (kind in ('strength', 'reps', 'cardio')),  -- reps = reps only, no weight
+  kind       text not null default 'strength' check (kind in ('strength', 'reps', 'cardio', 'running')),  -- reps = reps only, no weight
   equipment_choice boolean not null default false,  -- true = log each set as barbell or dumbbell
   created_by int references people(id) on delete set null,
   sort_order serial,                                -- charts appear in this order
@@ -27,9 +27,9 @@ create unique index if not exists exercises_name_unique on exercises (lower(name
 -- Databases created before barbell/dumbbell support need the column added.
 alter table exercises add column if not exists equipment_choice boolean not null default false;
 
--- Databases created before reps-only exercises need the wider kind check.
+-- Databases created before reps-only exercises and running need the wider kind check.
 alter table exercises drop constraint if exists exercises_kind_check;
-alter table exercises add constraint exercises_kind_check check (kind in ('strength', 'reps', 'cardio'));
+alter table exercises add constraint exercises_kind_check check (kind in ('strength', 'reps', 'cardio', 'running'));
 
 -- The original seven. Do not add sort_order here: the sequence numbers them in order.
 insert into exercises (id, name, kind, equipment_choice) values
@@ -42,11 +42,16 @@ insert into exercises (id, name, kind, equipment_choice) values
   ('cardio',          'Cardio',                'cardio',   false)
 on conflict do nothing;
 
+-- Running has its own tile (easy, tempo and intervals), separate from Cardio.
+insert into exercises (id, name, kind, equipment_choice) values ('running', 'Running', 'running', false)
+on conflict do nothing;
+
 -- Existing databases already have these rows, so switch the option on for them too.
 update exercises set equipment_choice = true where id in ('bench_press', 'squat', 'shoulder_press');
 
 -- One row per set. Cardio is one row per day with only duration_min filled in.
--- Reps-only exercises leave weight null.
+-- Reps-only exercises leave weight null. Assisted sets have a negative weight (the assistance).
+-- Running is one row per run (or per interval), with run_type, distance_km and duration_sec.
 create table if not exists entries (
   id           serial primary key,
   person_id    int not null references people(id) on delete cascade,
@@ -57,24 +62,37 @@ create table if not exists entries (
   reps         int,
   duration_min numeric(6,1),
   equipment    text check (equipment in ('barbell', 'dumbbell')),  -- null = not recorded (counted as barbell)
-  created_at   timestamptz not null default now(),
-
-  constraint entries_shape check (
-    (exercise = 'cardio' and duration_min is not null and weight is null and reps is null)
-    or
-    (exercise <> 'cardio' and reps is not null and duration_min is null)
-  ),
-  constraint entries_positive check (
-    coalesce(weight, 0) >= 0 and coalesce(reps, 1) >= 1 and coalesce(duration_min, 1) > 0
-  )
+  run_type     text check (run_type in ('easy', 'tempo', 'intervals')),
+  distance_km  numeric(6,2),
+  duration_sec int,
+  created_at   timestamptz not null default now()
 );
 
--- Databases created before reps-only exercises required a weight on every set.
+-- Databases created before running need its columns added.
+alter table entries add column if not exists run_type text check (run_type in ('easy', 'tempo', 'intervals'));
+alter table entries add column if not exists distance_km numeric(6,2);
+alter table entries add column if not exists duration_sec int;
+
+-- What each kind of row must contain. Re-created on every run so older databases pick up
+-- reps-only sets (no weight) and running.
 alter table entries drop constraint if exists entries_shape;
 alter table entries add constraint entries_shape check (
-  (exercise = 'cardio' and duration_min is not null and weight is null and reps is null)
+  (exercise = 'cardio' and duration_min is not null and weight is null and reps is null
+     and run_type is null and distance_km is null and duration_sec is null)
   or
-  (exercise <> 'cardio' and reps is not null and duration_min is null)
+  (exercise = 'running' and run_type is not null and distance_km is not null and duration_sec is not null
+     and weight is null and reps is null and duration_min is null)
+  or
+  (exercise not in ('cardio', 'running') and reps is not null and duration_min is null
+     and run_type is null and distance_km is null and duration_sec is null)
+);
+
+-- Weight may be negative (assisted exercises: the assistance is logged as minus kg), so only
+-- reps, minutes, distance and time are checked here. The API keeps weight within -500 to 1000.
+alter table entries drop constraint if exists entries_positive;
+alter table entries add constraint entries_positive check (
+  coalesce(reps, 1) >= 1 and coalesce(duration_min, 1) > 0
+  and coalesce(distance_km, 1) > 0 and coalesce(duration_sec, 1) > 0
 );
 
 -- Databases created before barbell/dumbbell support need the column added.
@@ -104,4 +122,15 @@ create index if not exists entries_by_exercise_date on entries (exercise, entry_
 create table if not exists discord_posts (
   day     date primary key,
   sent_at timestamptz not null default now()
+);
+
+-- Body weight, one reading per person per day. Not shown on its own tile: it is used by the
+-- "× BW" chart mode, which divides each day's best set by the latest body weight logged on
+-- or before that day.
+create table if not exists body_weights (
+  person_id  int not null references people(id) on delete cascade,
+  entry_date date not null,
+  weight_kg  numeric(5,1) not null check (weight_kg between 20 and 400),
+  created_at timestamptz not null default now(),
+  primary key (person_id, entry_date)
 );

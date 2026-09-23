@@ -1,13 +1,76 @@
 import { useState } from 'react';
 import { MAX_PEOPLE } from '../lib/constants.js';
+import { dayLabel } from '../lib/metrics.js';
 
 const NEW_PERSON = 'new';
 
+// [value, short label, full description for the hover title]
 const MODE_OPTIONS = [
-  ['total', 'Total weight'],
-  ['pct', '% change'],
-  ['best', 'Best set'],
+  ['total', 'Total', 'Total weight: last 3 sets, weight × reps'],
+  ['pct', '% change', '% change since first log'],
+  ['best', 'Best set', 'Best set of the day'],
+  ['bw', '× BW', 'Best set as a multiple of body weight'],
 ];
+
+// Log today's body weight for the selected person. Shown under the chart options; it is
+// only used by the "× BW" mode, so there is no tile for it.
+function BodyWeightField({ me, latest, onSave }) {
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function save(event) {
+    event.preventDefault();
+    const kg = Number(value);
+    if (value === '' || !(kg >= 20 && kg <= 400)) {
+      setError('Enter 20 to 400 kg.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await onSave(kg);
+      setValue('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  let note;
+  if (!me) note = 'Choose who you are to log your body weight.';
+  else if (latest) note = `Last: ${latest.weight_kg} kg on ${dayLabel(latest.date)}. Saving logs it for today.`;
+  else note = 'Saving logs it for today. Used by the × BW chart mode.';
+
+  return (
+    <form className="bw-field" onSubmit={save}>
+      <label htmlFor="bw-input">Body weight</label>
+      <input
+        id="bw-input"
+        className="dark-input"
+        type="number"
+        inputMode="decimal"
+        min="20"
+        max="400"
+        step="0.1"
+        placeholder={latest ? String(latest.weight_kg) : 'kg'}
+        value={value}
+        disabled={!me || busy}
+        onChange={(e) => setValue(e.target.value)}
+        title={note}
+        aria-describedby="bw-note"
+      />
+      <button type="submit" className="ghost-dark small" disabled={!me || busy}>
+        Save
+      </button>
+      {/* Only errors take up a line, so the tile keeps its fixed height. */}
+      <p id="bw-note" className={error ? 'bw-note dark-error' : 'sr-only'} role={error ? 'alert' : undefined}>
+        {error || note}
+      </p>
+    </form>
+  );
+}
 
 // The full-width top tile. Its first section is identity and chart mode; the other
 // sections (activity grid, activity log, Google Sheets) are passed in as children.
@@ -21,6 +84,8 @@ export default function ControlPanel({
   onModeChange,
   equalise,
   onEqualiseChange,
+  latestBodyWeight,
+  onLogBodyWeight,
   children,
 }) {
   const [adding, setAdding] = useState(false);
@@ -115,8 +180,8 @@ export default function ControlPanel({
 
         <fieldset className="mode">
           <legend>Charts show</legend>
-          {MODE_OPTIONS.map(([value, label]) => (
-            <label key={value}>
+          {MODE_OPTIONS.map(([value, label, title]) => (
+            <label key={value} title={title}>
               <input type="radio" name="mode" value={value} checked={mode === value} onChange={() => onModeChange(value)} />
               {label}
             </label>
@@ -137,6 +202,8 @@ export default function ControlPanel({
             </span>
           </span>
         </div>
+
+        <BodyWeightField key={me?.id ?? 'none'} me={me} latest={latestBodyWeight} onSave={onLogBodyWeight} />
       </div>
 
       {children}

@@ -44,4 +44,7 @@ export const api = {
   entries: () => request('entries'),
   addEntry: (payload) => request('entries', { method: 'POST', body: payload }),
   deleteEntry: (id, personId) => request(`entries?id=${id}&personId=${personId}`, { method: 'DELETE' }),
+  bodyWeights: () => request('bodyweights'),
+  logBodyWeight: (personId, date, weightKg) =>
+    request('bodyweights', { method: 'POST', body: { personId, date, weightKg } }),
 };

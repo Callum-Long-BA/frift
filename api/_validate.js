@@ -1,4 +1,13 @@
-import { EQUIPMENT, MAX_EXERCISE_NAME, MAX_SETS_PER_ENTRY } from '../src/lib/constants.js';
+import {
+  EQUIPMENT,
+  MAX_EXERCISE_NAME,
+  MAX_RUN_KM,
+  MAX_RUN_SECONDS,
+  MAX_SETS_PER_ENTRY,
+  MAX_WEIGHT,
+  MIN_WEIGHT,
+  RUN_TYPES,
+} from '../src/lib/constants.js';
 import { HttpError } from './_http.js';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -63,6 +72,8 @@ export function parseDate(value, now = new Date()) {
 //   { kind: 'strength', personId, exercise, date, equipment, sets: [{ weight, reps }] }
 //   { kind: 'reps',     personId, exercise, date, equipment: null, sets: [{ weight: null, reps }] }
 //   { kind: 'cardio',   personId, exercise, date, durationMin }
+//   { kind: 'running',  personId, exercise, date, runType, runs: [{ distanceKm, seconds }] }
+//     (one run for easy and tempo; one per interval for intervals)
 export function parseNewEntry(body, exercises, now = new Date()) {
   const personId = parseId(body?.personId, 'Person');
   const exercise = exercises.find((e) => e.id === body?.exercise);
@@ -75,6 +86,29 @@ export function parseNewEntry(body, exercises, now = new Date()) {
       throw new HttpError(400, 'Cardio duration must be between 1 and 600 minutes.');
     }
     return { kind: 'cardio', personId, exercise: exercise.id, date, durationMin };
+  }
+
+  if (exercise.kind === 'running') {
+    const runType = body?.runType;
+    if (!RUN_TYPES.includes(runType)) throw new HttpError(400, 'Choose easy, tempo or intervals.');
+    const rawRuns = body?.runs;
+    const most = runType === 'intervals' ? MAX_SETS_PER_ENTRY : 1;
+    if (!Array.isArray(rawRuns) || rawRuns.length < 1 || rawRuns.length > most) {
+      throw new HttpError(400, runType === 'intervals' ? `Log between 1 and ${most} intervals at a time.` : 'Log one run at a time.');
+    }
+    const runs = rawRuns.map((r, i) => {
+      const label = runType === 'intervals' ? `Interval ${i + 1}: ` : '';
+      const distanceKm = toNumber(r?.distanceKm);
+      const seconds = toNumber(r?.seconds);
+      if (!Number.isFinite(distanceKm) || distanceKm <= 0 || distanceKm > MAX_RUN_KM) {
+        throw new HttpError(400, `${label}distance must be more than 0 and at most ${MAX_RUN_KM} km.`);
+      }
+      if (!Number.isInteger(seconds) || seconds < 1 || seconds > MAX_RUN_SECONDS) {
+        throw new HttpError(400, `${label}enter a time of at least 1 second.`);
+      }
+      return { distanceKm: Math.round(distanceKm * 100) / 100, seconds };
+    });
+    return { kind: 'running', personId, exercise: exercise.id, date, runType, runs };
   }
 
   const rawSets = body?.sets;
@@ -91,8 +125,8 @@ export function parseNewEntry(body, exercises, now = new Date()) {
       return { weight: null, reps };
     }
     const weight = toNumber(s?.weight);
-    if (!Number.isFinite(weight) || weight < 0 || weight > 1000) {
-      throw new HttpError(400, `Set ${i + 1}: weight must be between 0 and 1000 kg.`);
+    if (!Number.isFinite(weight) || weight < MIN_WEIGHT || weight > MAX_WEIGHT) {
+      throw new HttpError(400, `Set ${i + 1}: weight must be between ${MIN_WEIGHT} and ${MAX_WEIGHT} kg (minus for assisted).`);
     }
     if (!Number.isInteger(reps) || reps < 1 || reps > 200) {
       throw new HttpError(400, `Set ${i + 1}: reps must be a whole number from 1 to 200.`);
@@ -108,4 +142,15 @@ export function parseNewEntry(body, exercises, now = new Date()) {
   }
 
   return { kind: repsOnly ? 'reps' : 'strength', personId, exercise: exercise.id, date, equipment, sets };
+}
+
+// { personId, date, weightKg } for a body weight reading. One decimal place is kept.
+export function parseBodyWeight(body, now = new Date()) {
+  const personId = parseId(body?.personId, 'Person');
+  const date = parseDate(body?.date, now);
+  const weightKg = toNumber(body?.weightKg);
+  if (!Number.isFinite(weightKg) || weightKg < 20 || weightKg > 400) {
+    throw new HttpError(400, 'Body weight must be between 20 and 400 kg.');
+  }
+  return { personId, date, weightKg: Math.round(weightKg * 10) / 10 };
 }
