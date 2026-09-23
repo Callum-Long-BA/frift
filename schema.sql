@@ -134,3 +134,8 @@ create table if not exists body_weights (
   created_at timestamptz not null default now(),
   primary key (person_id, entry_date)
 );
+
+-- Where a row came from: null = logged in the app, 'sheet' = copied from someone's Google
+-- Sheet by the 6pm sync (api/sheet-sync.js). The sync only ever replaces 'sheet' rows.
+alter table entries add column if not exists source text check (source in ('sheet'));
+alter table body_weights add column if not exists source text check (source in ('sheet'));
