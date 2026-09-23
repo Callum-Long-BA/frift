@@ -3,7 +3,7 @@ import { dayLabel, recentSessions } from '../lib/metrics.js';
 
 const SHOWN = 5;
 
-// The latest sessions logged (one person, one day), newest first. The line below each
+// The latest sessions (one person, one day), by the date they were for, newest first. The line below each
 // says how many personal records that session set, and in which exercises.
 export default function ActivityLog({ people, entries, exercises }) {
   const sessions = useMemo(() => recentSessions(entries, exercises, SHOWN), [entries, exercises]);
