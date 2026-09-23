@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDailyMessages, escapeMarkdown, londonNow } from '../api/_discord.js';
+import { buildDailyMessages, discordLink, escapeMarkdown, isWebhookUrl, londonNow } from '../api/_discord.js';
 import { route } from '../api/_http.js';
 
 test('londonNow follows UK summer and winter time', () => {
@@ -113,4 +113,18 @@ test('allowCron lets in the cron secret; other routes and wrong secrets still ne
   assert.equal(await call(route({ GET: ok }, { allowCron: true }), { authorization: 'Bearer nope' }), 401);
   assert.equal(await call(route({ GET: ok }, { allowCron: true }), { 'x-frift-passcode': 'secret-lift' }), 200);
   assert.equal(await call(route({ GET: ok }), { authorization: 'Bearer cron-123' }), 401);
+});
+
+test('isWebhookUrl accepts webhook URLs and rejects channel links and anything else', () => {
+  assert.equal(isWebhookUrl('https://discord.com/api/webhooks/123456/abc-DEF_789'), true);
+  assert.equal(isWebhookUrl(' https://discordapp.com/api/v10/webhooks/123456/abc?thread_id=9 '), true);
+  assert.equal(isWebhookUrl('https://discord.com/channels/111/222'), false);
+  assert.equal(isWebhookUrl('https://discord.com/api/webhooks/123456'), false);
+  assert.equal(isWebhookUrl('https://evil.example/api/webhooks/1/abc'), false);
+  assert.equal(isWebhookUrl(''), false);
+});
+
+test('discordLink opens a channel or one message', () => {
+  assert.equal(discordLink('111', '222'), 'https://discord.com/channels/111/222');
+  assert.equal(discordLink('111', '222', '333'), 'https://discord.com/channels/111/222/333');
 });
