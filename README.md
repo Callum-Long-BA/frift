@@ -20,9 +20,10 @@ Live at **https://frift.callumlong.com**.
 10. [Deploying changes](#deploying-changes)
 11. [Local development and tests](#local-development-and-tests)
 12. [Operations cookbook (SQL)](#operations-cookbook-sql)
-13. [Daily Discord post](#daily-discord-post)
-14. [Security and limits](#security-and-limits)
-15. [Troubleshooting](#troubleshooting)
+13. [Daily sheet sync](#daily-sheet-sync)
+14. [Daily Discord post](#daily-discord-post)
+15. [Security and limits](#security-and-limits)
+16. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -43,6 +44,7 @@ Live at **https://frift.callumlong.com**.
 - **Last 3 weeks.** The second section of A1, with nothing to scroll. One row per person, one box per day, for the current week plus the two before it (`ACTIVITY_WEEKS` in `src/lib/constants.js`). Newest first: the current week comes first, each week runs Sunday back to Monday, and each week is labelled with its Monday's date. A filled box in that person's colour means they logged a set or cardio session that day; hovering it names what. Days later in the current week show as dashed, empty boxes. Today's column is outlined all the way down every row. The rows shrink evenly when there are too many people to fit at full size, the boxes stretch to fit the width, and when it is narrow the names shorten to their first three letters (hover for the full name).
 - **Activity log.** The third section of A1: the last 5 sessions logged (one person, one day), newest first, with the exercises done. The line below says how many PRs that session set, with a 🏆 and the exercise names. A PR means the session's best beat every earlier session of that exercise by that person: the heaviest weight for weight × reps (barbell and dumbbell counted separately), the most reps in a set for reps-only, and the longest time for cardio. The first ever session of an exercise sets a baseline rather than a PR.
 - **Google Sheets upload.** The fourth section of A1 is a placeholder for instructions on logging sets automatically from a Google Sheet, coming in a later version.
+- **Daily sheet sync.** At 6pm UK time, FRIFT copies new sets from Kenneth's and Kyle's own Google Sheets. See [Daily sheet sync](#daily-sheet-sync).
 - **Daily Discord post.** At 8pm UK time, FRIFT posts to the group's Discord channel: one message per person who logged anything that day, listing their exercises and showing the sets of any PR with a 🏆. See [Daily Discord post](#daily-discord-post).
 - **Dark only.** The app is always dark. Each person's stored colour is shown as a lighter twin, so lines stay easy to read on a dark background; the database still stores the original colour.
 - **Cardio.** Logged as minutes, one entry per person per day.
@@ -136,6 +138,7 @@ Set in Vercel: project > Settings > Environment Variables.
 | `DATABASE_URL` | Yes | Neon connection string, including the password. Treat as a secret. |
 | `FRIFT_PASSCODE` | Yes | The shared group passcode. Treat as a secret. |
 | `POSTGRES_URL` | No | Older name for the database URL. Used only if `DATABASE_URL` is missing. |
+| `KENNETH_SHEET_ID`, `KYLE_SHEET_ID` | For the sheet sync | The id of each person's Google Sheet: the long part of its address between `/d/` and `/edit`. Kept out of the code because anyone with a sheet's address can read it. |
 | `DISCORD_WEBHOOK_URL` | For the Discord post | The #fitness channel's webhook URL. Anyone with it can post in that channel, so treat it as a secret. |
 | `CRON_SECRET` | For the Discord post | Any long random string. Vercel sends it with its scheduled calls, and the endpoint only accepts them if it matches. Treat as a secret. |
 
@@ -221,6 +224,7 @@ All endpoints live under `/api`, take and return JSON, and are never cached.
 | `GET /api/people` | All people: `id`, `name`, `colour`. |
 | `POST /api/people` | Add a person. Body: `{ "name": "Sam" }`. The colour is assigned automatically. Fails with `409` if the name is taken or 10 people already exist. |
 | `GET /api/exercises` | All exercises in chart order: `id`, `name`, `kind`, `equipment_choice`, `created_by`, `sort_order`. |
+| `GET /api/sheet-sync` | Sync the Google Sheets now and return what was added, replaced, unchanged or left alone, per person. Vercel Cron calls it at 6pm with `CRON_SECRET`. |
 | `GET /api/daily-discord` | Post a day's entries to Discord now and return `{ date, posted, webhook, links }`, with a link to each message posted. `?check=1` posts nothing and only reports the webhook's server and channel. Defaults to today (UK time); add `?date=2026-09-22` for another day. Vercel Cron calls it at 8pm with `CRON_SECRET` instead of the passcode. |
 | `POST /api/exercises` | Add an exercise. Body: `{ "name": "Romanian deadlift", "personId": 1, "kind": "strength", "equipmentChoice": true }`. `kind` is `strength` (weight × reps, the default) or `reps` (reps only; `equipmentChoice` is ignored). Fails with `409` if the name exists or 25 exercises exist. |
 | `GET /api/entries` | Every logged set, oldest first: `id`, `person_id`, `exercise`, `date` (`YYYY-MM-DD`), `set_number`, `weight`, `reps`, `duration_min`, `equipment`. |
@@ -266,6 +270,9 @@ frift/
 │   ├── exercises.js           GET / POST exercises
 │   ├── entries.js             GET / POST / DELETE entries
 │   ├── daily-discord.js       8pm Discord post (Vercel Cron)
+│   ├── sheet-sync.js          6pm Google Sheet sync (Vercel Cron)
+│   ├── _sheets.js             which sheets, how they are read, what to add or replace
+│   ├── _webhook.js            posting to the Discord webhook
 │   ├── _http.js               passcode and cron checks, method routing, JSON errors
 │   ├── _discord.js            builds the Discord messages
 │   ├── _db.js                 Neon connection (reads DATABASE_URL)
@@ -295,7 +302,7 @@ frift/
 │       ├── metrics.js         all chart calculations
 │       └── storage.js         safe localStorage helpers
 ├── test/                      unit tests (49)
-├── vercel.json                schedule for the Discord post
+├── vercel.json                schedules for the sheet sync and the Discord post
 ├── schema.sql                 database setup and upgrades (safe to re-run)
 ├── index.html                 page shell and fonts
 ├── vite.config.js
@@ -447,6 +454,42 @@ where column_name in ('equipment', 'equipment_choice');
 You should see two rows: `entries / equipment` and `exercises / equipment_choice`.
 
 ---
+
+## Daily sheet sync
+
+Kenneth and Kyle keep their own training spreadsheets. At **6pm UK time** every day FRIFT reads both and copies in anything new, so their sets appear in FRIFT (and in the 8pm Discord post) without logging them twice. Only sets dated **24 Sep 2026 or later** are read; everything before that was imported once by hand.
+
+How each sheet is read lives in `api/_sheets.js` (`SHEETS`):
+
+| Person | Dates | Notes |
+|---|---|---|
+| Kenneth | Rows are "Week N", with Week 10 = w/c Mon 21 Sep 2026. Day 1, 2, 3, 4 = Mon, Tue, Thu, Fri. | Tabs "2026 Gym Progression" and "2026 Gym Progression - 2". Names in the row under "Day N". |
+| Kyle | The date written in each Day column. | First tab, from row 9 down. Names beside "Day N". The Weight column (date, then e.g. `96.6kg`) is body weight. |
+
+Each sheet also has a **name map** from its exercise names to FRIFT's (for example Kenneth's "Dumbbell press" is Bench press, marked dumbbell; Kyle's "Cable Row" is Seated row). Set cells are `60 x 8` or `15kg x 13`; blank and `X` cells mean nothing was done.
+
+**What a run does**, for each person, exercise and day:
+
+- Nothing in FRIFT yet: the sheet's sets are added (marked `source = 'sheet'`).
+- Only sheet sets there, and the sheet has changed since (a set added, a typo fixed): they are **replaced** with what the sheet says now.
+- Anything logged **in the app** for that exercise and day: left alone. The app always wins.
+- Body weight works the same way; a reading logged in the app is never replaced.
+
+Deleting a whole exercise-day from a sheet does not delete it from FRIFT; delete it in the app.
+
+**When something cannot be imported** (an exercise name not in the map yet, a cell that is not weight x reps, a sheet that cannot be read), it is skipped and FRIFT posts one line per sheet in the Discord channel, e.g. *⚠️ FRIFT sheet sync for Kyle: not sure which FRIFT exercise "Pec deck" is, so it was skipped.* Add the name to that sheet's map in `api/_sheets.js` (or add the exercise first) and deploy; the next run picks up everything that was skipped. The warning repeats each day until it is fixed.
+
+**Timing.** Like the Discord post, `vercel.json` calls it at 17:00 and 18:00 UTC and only the call in the 6pm London hour runs, so it stays at 6pm through summer and winter time (any time from 6:00 to 6:59pm on the Hobby plan). Each run re-reads the whole sheet, so running it again is always safe.
+
+**Setting it up:**
+
+1. Run the latest `schema.sql` in Neon (it adds the `source` columns).
+2. Both sheets must stay shared as **Anyone with the link: Viewer**.
+3. In Vercel > Settings > Environment Variables, add `KENNETH_SHEET_ID` and `KYLE_SHEET_ID` (the part of each sheet's address between `/d/` and `/edit`). `CRON_SECRET` is already set for the Discord post. Redeploy.
+4. To run it now instead of waiting for 6pm, in the browser console on the live site:
+   `await (await fetch('/api/sheet-sync', { headers: { 'x-frift-passcode': localStorage.getItem('frift.passcode') } })).json()`
+
+**If someone starts a new tab or changes the layout** (a new block of rows further down is fine), update their entry in `SHEETS`.
 
 ## Daily Discord post
 
