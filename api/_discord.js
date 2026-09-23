@@ -20,6 +20,24 @@ export function londonNow(now = new Date()) {
   return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) };
 }
 
+// A Discord webhook URL: https://discord.com/api/webhooks/<id>/<token>. A link to a channel
+// (discord.com/channels/...) is not one, and posting to it would look fine but go nowhere.
+const WEBHOOK_RE = /^https:\/\/(?:(?:canary|ptb)\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/\d+\/[\w-]+\/?$/;
+
+export function isWebhookUrl(url) {
+  try {
+    const parsed = new URL(String(url).trim());
+    return WEBHOOK_RE.test(`${parsed.origin}${parsed.pathname}`);
+  } catch {
+    return false;
+  }
+}
+
+// A link that opens a channel (or one message in it) in Discord.
+export function discordLink(guildId, channelId, messageId) {
+  return ['https://discord.com/channels', guildId ?? '@me', channelId, messageId].filter(Boolean).join('/');
+}
+
 // Names are typed by people in the group, so stop them being read as Discord formatting.
 export const escapeMarkdown = (text) => String(text).replace(/([\\*_~`|])/g, '\\$1');
 
