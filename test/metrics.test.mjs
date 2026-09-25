@@ -11,6 +11,7 @@ import {
   dayLabel,
   weekGrid,
   recentSessions,
+  chartRangeStart,
   bodyWeightOn,
   runningChartData,
   formatDuration,
@@ -435,7 +436,7 @@ test('barbell and dumbbell records are kept apart; unrecorded equipment counts a
   assert.deepEqual(byDate.get('2026-09-06'), []); // same as the earlier unrecorded (barbell) 60
 });
 
-test('reps-only PRs are most reps in a set; cardio PRs are the longest session', () => {
+test('reps-only PRs are the most total reps in a day; cardio PRs are the longest session', () => {
   const pull = (date, n) => set(1, date, 1, null, n, 'pull_ups');
   const entries = [pull('2026-09-01', 10), pull('2026-09-02', 12), run(1, '2026-09-01', 30), run(1, '2026-09-02', 25)];
   const [latest] = recentSessions(entries, kinds, 1);
@@ -535,4 +536,14 @@ test('running PRs: longest easy run, fastest tempo pace within the same distance
   assert.deepEqual(prs.get('2026-09-02'), []);
   assert.deepEqual(prs.get('2026-09-03'), ['running']);
   assert.deepEqual(prs.get('2026-09-05'), []);
+});
+
+// ---------- chart ranges ----------
+
+test('chartRangeStart: 8 weeks is this week plus the 7 before, from a Monday', () => {
+  assert.equal(chartRangeStart('2026-09-25', '8w'), '2026-08-03'); // Fri -> Mon 21 Sep - 7 weeks
+  assert.equal(chartRangeStart('2026-09-21', '8w'), '2026-08-03'); // already Monday
+  assert.equal(chartRangeStart('2026-09-27', '8w'), '2026-08-03'); // Sunday, same week
+  assert.equal(chartRangeStart('2026-09-25', '3m'), '2026-06-26');
+  assert.equal(chartRangeStart('2026-09-25', 'all'), null);
 });

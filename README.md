@@ -36,13 +36,14 @@ Live at **https://frift.callumlong.com**.
 - **Four chart modes** (radio buttons in A1): Total, % change, Best set and **× BW** (best set as a multiple of body weight). Hover a mode for its full name. See [How the numbers work](#how-the-numbers-work).
 - **Body weight.** A field under the chart options logs your body weight for today (one reading per day; saving again replaces it). There is no body weight tile: it is only used by the × BW mode. Hover the field to see your last reading.
 - **Assisted exercises.** Log the assistance as a minus weight, e.g. `-20` for a pull up with 20 kg of help. Less assistance counts as a better set and as a PR.
-- **Full screen.** Every chart tile has an expand button (⤢) beside the **+** that opens it full screen, with more dates on the axis. Escape or × closes it.
+- **Last 8 weeks on tiles.** Every chart tile shows the current week and the 7 before it. Older sessions are still there: expand the chart to see them.
+- **Expanded view.** Every chart tile has an expand button (⤢) beside the **+**. It opens the chart as wide as the board, showing **everything** logged, with more dates on the axis. Range buttons (**8W · 3M · 6M · 1Y · All**) change the span, and the slider under the chart has a handle at each end: drag them to zoom into any stretch of dates (**Reset zoom** goes back). Escape or × closes it.
 - **Running.** A tile of its own in Cardio & calisthenics (Cardio is unchanged). A dropdown at the top picks **Easy**, **Tempo** or **Intervals**, and **+** logs a run of that type with a distance (km) and a time (minutes and seconds). Easy charts the distance per day. Tempo charts the best pace, for **5K**, **10K** or **All** (a switch under the dropdown; 5K and 10K allow 5% either way); tempo has 5 km and 10 km quick-pick buttons when logging. Intervals are logged as several distance-and-time pairs and chart the session's average pace (total time ÷ total distance). Pace charts are upside down so faster is higher. Your dropdown and switch choices are remembered in your browser.
 - **Equalise.** A checkbox in A1 that counts dumbbell sets at double weight so they can be compared with barbell lifts. Hover or focus "What is this?" beside it for a one-line explanation.
 - **Hover details.** Hover a date on any weight × reps chart to see every person's value for that day and every set they did.
 - **Add exercise.** A tile after the last chart lets anyone add a new exercise (up to 30 in total), logged either as weight × reps or as **reps only** (for bodyweight moves like pull-ups). New charts appear for everyone.
 - **Last 3 weeks.** The second section of A1, with nothing to scroll. One row per person, one box per day, for the current week plus the two before it (`ACTIVITY_WEEKS` in `src/lib/constants.js`). Newest first: the current week comes first, each week runs Sunday back to Monday, and each week is labelled with its Monday's date. A filled box in that person's colour means they logged a set or cardio session that day; hovering it names what. Days later in the current week show as dashed, empty boxes. Today's column is outlined all the way down every row. The rows shrink evenly when there are too many people to fit at full size, the boxes stretch to fit the width, and when it is narrow the names shorten to their first three letters (hover for the full name).
-- **Activity log.** The third section of A1: the 5 most recent sessions (one person, one day) by the date they were for, newest first, with the exercises done. A session logged late, or backdated, appears by its date rather than when it was entered. The line below says how many PRs that session set, with a 🏆 and the exercise names. A PR means the session's best beat every earlier session of that exercise by that person: the heaviest weight for weight × reps (barbell and dumbbell counted separately), the most reps in a set for reps-only, and the longest time for cardio. The first ever session of an exercise sets a baseline rather than a PR.
+- **Activity log.** The third section of A1: the 5 most recent sessions (one person, one day) by the date they were for, newest first, with the exercises done. A session logged late, or backdated, appears by its date rather than when it was entered. The line below says how many PRs that session set, with a 🏆 and the exercise names. A PR means the session's best beat every earlier session of that exercise by that person: the heaviest weight for weight × reps (barbell and dumbbell counted separately), the most **total reps in a day** for reps-only (10 + 8 + 6 = 24), and the longest time for cardio. The first ever session of an exercise sets a baseline rather than a PR.
 - **Google Sheets upload.** The fourth section of A1 is a placeholder for instructions on logging sets automatically from a Google Sheet, coming in a later version.
 - **Daily sheet sync.** At 6pm UK time, FRIFT copies new sets from Kenneth's and Kyle's own Google Sheets. See [Daily sheet sync](#daily-sheet-sync).
 - **Daily Discord post.** At 8pm UK time, FRIFT posts to the group's Discord channel: one message per person who logged anything that day, listing their exercises and showing the sets of any PR with a 🏆. See [Daily Discord post](#daily-discord-post).
@@ -493,11 +494,19 @@ Deleting a whole exercise-day from a sheet does not delete it from FRIFT; delete
 
 ## Daily Discord post
 
-At **8pm UK time** every day, FRIFT posts to the group's Discord channel: **one message per person** who logged anything that day, in the order people joined. Each is one line listing their exercises in the order they logged them, for example:
+At **8pm UK time** every day, FRIFT posts to the group's Discord channel: **one message per person** who logged anything that day, in the order people joined, listing their exercises in the order they logged them. With no PRs it is one line:
 
-> Sam worked out today ✅ -> Bench press, Squat, Shoulder press [PR! 34kg x 10, 40kg x 10 🏆, 40kg x 10], Seated row.
+> Sam worked out today ✅ -> Bench press, Squat, Seated row.
 
-An exercise where they hit a PR is followed by all its sets in brackets, with 🏆 on the set that made the record (the first to reach the day's best). PRs use the same rule as the activity log. Reps-only sets show as `12 reps`, cardio as `30 min`, and `DB` marks dumbbell sets. If no one logged anything, nothing is posted. Entries count toward the day they were logged **for**, so a set added after 8pm (or for an earlier date) is not posted.
+With any PR, each exercise gets its own bulleted line, and each PR shows how it was set:
+
+> Sam worked out today ✅ ->
+> \* Pull ups [PR! 🏆 24 Total daily reps]
+> \* Cardio [PR! 🏆 45 min]
+> \* Bench press [PR! 20kg x 8, 🏆 25kg x 8, 25kg x 4]
+> \* Lateral raise
+
+For weights and runs, every set is listed with 🏆 on the one that made the record (the first to reach the day's best); a reps-only PR shows the day's total reps. PRs use the same rule as the activity log. `DB` marks dumbbell sets. If no one logged anything, nothing is posted. Entries count toward the day they were logged **for**, so a set added after 8pm (or for an earlier date) is not posted.
 
 **Timing.** Vercel schedules are in UTC, so `vercel.json` calls the endpoint at both 19:00 and 20:00 UTC, and only the call that falls in the 8pm hour in London posts. That keeps it at 8pm through summer and winter time. On Vercel's free Hobby plan a scheduled call can arrive any time within its hour, so the post can land between 8:00 and 8:59pm. Each posted day is recorded in the `discord_posts` table, so a repeated call cannot post twice.
 

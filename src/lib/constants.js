@@ -59,5 +59,16 @@ export const PERSON_PALETTE = [
 // What the API stores. Unchanged for the database: still the original (light) values.
 export const PERSON_COLOURS = PERSON_PALETTE.map((c) => c.light);
 
+// How much of the timeline a chart shows. Tiles show the last 8 weeks (this week and the
+// 7 before it); the expanded view starts on "All" and can be narrowed with these.
+export const CHART_RANGES = [
+  { key: '8w', label: '8W', title: 'Last 8 weeks' },
+  { key: '3m', label: '3M', title: 'Last 3 months' },
+  { key: '6m', label: '6M', title: 'Last 6 months' },
+  { key: '1y', label: '1Y', title: 'Last year' },
+  { key: 'all', label: 'All', title: 'Everything' },
+];
+export const TILE_RANGE = '8w';
+
 // The activity strip shows this many weeks, Monday to Sunday, ending with the current week.
 export const ACTIVITY_WEEKS = 3;

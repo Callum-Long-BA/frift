@@ -48,7 +48,7 @@ test('one message per person who logged today, in the order people joined', () =
 
 test('one line: exercises in the order logged; a PR exercise lists its sets with the record set marked', () => {
   const [sam, jo] = buildDailyMessages({ people, exercises, entries, date: today });
-  assert.equal(sam.payload.content, 'Sam worked out today ✅ -> Bench press [PR! 60kg x 8, 62.5kg x 6 🏆], Pull ups.');
+  assert.equal(sam.payload.content, 'Sam worked out today ✅ ->\n* Bench press [PR! 60kg x 8, 🏆 62.5kg x 6]\n* Pull ups');
   assert.equal(jo.payload.content, 'Jo worked out today ✅ -> Cardio.');
 });
 
@@ -61,7 +61,7 @@ test('only the first set to reach the record gets the trophy, as in "34kg x 10, 
     row(1, today, 'shoulder_press', 3, { weight: 40, reps: 10 }),
   ];
   const [sam] = buildDailyMessages({ people, exercises: [...exercises, shoulder], entries: rows, date: today });
-  assert.equal(sam.payload.content, 'Sam worked out today ✅ -> Shoulder press [PR! 34kg x 10, 40kg x 10 🏆, 40kg x 10].');
+  assert.equal(sam.payload.content, 'Sam worked out today ✅ ->\n* Shoulder press [PR! 34kg x 10, 🏆 40kg x 10, 40kg x 10]');
 });
 
 test('reps-only and cardio PRs show reps and minutes; dumbbell sets are marked DB', () => {
@@ -77,7 +77,7 @@ test('reps-only and cardio PRs show reps and minutes; dumbbell sets are marked D
   const [sam] = buildDailyMessages({ people, exercises, entries: rows, date: today });
   assert.equal(
     sam.payload.content,
-    'Sam worked out today ✅ -> Pull ups [PR! 12 reps 🏆, 9 reps], Cardio [PR! 45 min 🏆], Bench press [PR! 25kg x 10 DB 🏆].',
+    'Sam worked out today ✅ ->\n* Pull ups [PR! 🏆 21 Total daily reps]\n* Cardio [PR! 🏆 45 min]\n* Bench press [PR! 🏆 25kg x 10 DB]',
   );
 });
 
@@ -141,6 +141,20 @@ test('runs show distance and time with the run type; assisted sets show minus we
   const [sam] = buildDailyMessages({ people, exercises: kinds, entries: rows, date: today });
   assert.equal(
     sam.payload.content,
-    'Sam worked out today ✅ -> Running (easy, tempo) [PR! 5km in 24:10 🏆, 3.5km in 21:00], Assisted pull up [PR! -20kg x 8 🏆].',
+    'Sam worked out today ✅ ->\n* Running (easy, tempo) [PR! 🏆 5km in 24:10, 3.5km in 21:00]\n* Assisted pull up [PR! 🏆 -20kg x 8]',
   );
+});
+
+test("reps-only PRs are the day's total reps, beating every earlier day's total", () => {
+  const rows = [
+    row(1, '2026-09-15', 'pull_ups', 1, { reps: 12 }),
+    row(1, '2026-09-15', 'pull_ups', 2, { reps: 10 }), // 22 that day
+    row(1, today, 'pull_ups', 1, { reps: 10 }),
+    row(1, today, 'pull_ups', 2, { reps: 8 }),
+    row(1, today, 'pull_ups', 3, { reps: 6 }), // 24: a PR, though no single set beats 12
+  ];
+  const [sam] = buildDailyMessages({ people, exercises, entries: rows, date: today });
+  assert.equal(sam.payload.content, 'Sam worked out today ✅ ->\n* Pull ups [PR! 🏆 24 Total daily reps]');
+  const fewer = rows.slice(0, 4); // 10 today: not a PR, so the one-line format
+  assert.equal(buildDailyMessages({ people, exercises, entries: fewer, date: today })[0].payload.content, 'Sam worked out today ✅ -> Pull ups.');
 });
