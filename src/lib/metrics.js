@@ -46,8 +46,8 @@ export function activityByPerson(entries, from, to) {
 }
 
 // What counts as a personal record for one entry (higher is better): the heaviest weight
-// for weight x reps (for assisted sets, less assistance), the most reps for reps-only, the
-// longest time for cardio. For running: the longest easy run, and the fastest pace for
+// for weight x reps (for assisted sets, less assistance), the longest time for cardio.
+// (Reps-only exercises compare the day's total reps instead; see sessionSummary.) For running: the longest easy run, and the fastest pace for
 // tempo runs and for a single interval (pace is negated so that faster counts as higher).
 function prMeasure(entry, kind) {
   if (kind === 'cardio') return entry.duration_min ?? 0;
@@ -74,10 +74,11 @@ function prTrack(entry, kind) {
 
 // One session: everything one person logged on one day, as { exerciseIds, prs, prEntryIds },
 // with exercises in the order they were logged. `prs` lists the exercises where that session
-// beat every earlier session by that person (see prMeasure). A first ever session of an
-// exercise sets a baseline, not a record. `prEntryIds` holds the set that made each record:
-// the first set (by set number) to reach the session's best. Used by the activity log and
-// the Discord post.
+// beat every earlier session by that person (see prMeasure). For reps-only exercises the
+// record is the day's total reps (10 + 8 + 6 = 24) against every earlier day's total. A first
+// ever session of an exercise sets a baseline, not a record. `prEntryIds` holds the set that
+// made each record: the first set (by set number) to reach the session's best (none for
+// reps-only, where the whole day made it). Used by the activity log and the Discord post.
 export function sessionSummary(entries, exercises, personId, date) {
   const kindOf = new Map(exercises.map((e) => [e.id, e.kind]));
   const rows = entries.filter((e) => e.person_id === personId && e.date === date).sort((a, b) => a.id - b.id);
@@ -85,6 +86,16 @@ export function sessionSummary(entries, exercises, personId, date) {
   const prEntryIds = new Set();
   const prs = exerciseIds.filter((exerciseId) => {
     const kind = kindOf.get(exerciseId) ?? 'strength';
+    if (kind === 'reps') {
+      const total = rows.filter((r) => r.exercise === exerciseId).reduce((sum, r) => sum + (r.reps ?? 0), 0);
+      const earlier = new Map(); // date -> that day's total reps
+      for (const e of entries) {
+        if (e.person_id === personId && e.exercise === exerciseId && e.date < date) {
+          earlier.set(e.date, (earlier.get(e.date) ?? 0) + (e.reps ?? 0));
+        }
+      }
+      return earlier.size > 0 && total > Math.max(...earlier.values());
+    }
     const best = new Map(); // track -> the set with this session's best
     for (const r of [...rows].sort((a, b) => a.set_number - b.set_number)) {
       if (r.exercise !== exerciseId) continue;
@@ -297,6 +308,18 @@ export function buildChartData(entries, exercise, mode, { equalise = false, body
   });
 
   return { rows, personIds: [...perPerson.keys()] };
+}
+
+// The first date a chart shows for a range (see CHART_RANGES), or null for everything.
+// '8w' is the Monday 7 weeks before this week's Monday, so 8 whole weeks including this one.
+export function chartRangeStart(today, range) {
+  const t = toTimestamp(today);
+  const back = (days) => new Date(t - days * DAY_MS).toISOString().slice(0, 10);
+  if (range === '8w') return back(((new Date(t).getUTCDay() + 6) % 7) + 7 * 7);
+  if (range === '3m') return back(91);
+  if (range === '6m') return back(182);
+  if (range === '1y') return back(365);
+  return null;
 }
 
 // Up to `max` evenly spread x-axis ticks, always on real logged dates.

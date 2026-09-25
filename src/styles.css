@@ -477,6 +477,32 @@ fieldset {
 
 /* ---------- Full-screen chart ---------- */
 
+/* The expanded chart's range buttons and zoom hint, above the plot. */
+.zoom-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+}
+
+.zoom-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 0 8px 0 14px;
+}
+
+.zoom-hint {
+  font-size: 0.82rem;
+  color: var(--text-2);
+}
+
+.zoom-plot {
+  flex: 1;
+  min-height: 0;
+}
+
 /* Width and height are set by ChartFrame: the board's width, in the window's proportions. */
 .full-dialog {
   width: calc(100vw - 48px);

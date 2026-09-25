@@ -53,46 +53,57 @@ function formatSet(row, kind) {
   return `${number(row.weight)}kg x ${row.reps}${row.equipment === 'dumbbell' ? ' DB' : ''}`;
 }
 
-// An exercise in the list: just its name, or for a PR every set in order, with the
-// record-making set marked: "Shoulder press [PR! 34kg x 10, 40kg x 10 🏆, 40kg x 10]".
-function exerciseText(exercise, rows, prEntryIds) {
+// An exercise in the list: just its name, or for a PR every set in order with the
+// record-making set marked, "Shoulder press [PR! 34kg x 10, 🏆 40kg x 10, 40kg x 10]". A
+// reps-only PR is the day's total instead: "Pull ups [PR! 🏆 24 Total daily reps]".
+function exerciseText(exercise, rows, isPr, prEntryIds) {
   let name = escapeMarkdown(exercise.name);
   // Running says which kinds of run: "Running (easy, tempo)".
   if (exercise.kind === 'running') {
     const types = RUN_TYPES.filter((t) => rows.some((r) => r.run_type === t));
     if (types.length > 0) name += ` (${types.join(', ')})`;
   }
-  if (!rows.some((r) => prEntryIds.has(r.id))) return name;
+  if (!isPr) return name;
+  if (exercise.kind === 'reps') {
+    const total = rows.reduce((sum, r) => sum + (r.reps ?? 0), 0);
+    return `${name} [PR! 🏆 ${total} Total daily reps]`;
+  }
   const sets = [...rows]
     .sort((a, b) => a.set_number - b.set_number)
-    .map((r) => `${formatSet(r, exercise.kind)}${prEntryIds.has(r.id) ? ' 🏆' : ''}`);
+    .map((r) => `${prEntryIds.has(r.id) ? '🏆 ' : ''}${formatSet(r, exercise.kind)}`);
   return `${name} [PR! ${sets.join(', ')}]`;
 }
 
 // One Discord webhook payload per person who logged anything on `date`, in the order
-// people joined, each a single line:
-//   "Sam worked out today ✅ -> Bench press, Squat, Shoulder press [PR! 34kg x 10, 40kg x 10 🏆, 40kg x 10], Seated row."
+// people joined. Without a PR it is one line:
+//   "Sam worked out today ✅ -> Bench press, Squat, Seated row."
+// With any PR, each exercise goes on its own bulleted line:
+//   Sam worked out today ✅ ->
+//   * Pull ups [PR! 🏆 24 Total daily reps]
+//   * Shoulder press [PR! 34kg x 10, 🏆 40kg x 10, 40kg x 10]
+//   * Seated row
 // PRs use the same rule as the activity log. Returns [{ personId, payload }].
 export function buildDailyMessages({ people, exercises, entries, date }) {
   const exerciseById = new Map(exercises.map((e) => [e.id, e]));
   const messages = [];
 
   for (const person of [...people].sort((a, b) => a.id - b.id)) {
-    const { exerciseIds, prEntryIds } = sessionSummary(entries, exercises, person.id, date);
+    const { exerciseIds, prs, prEntryIds } = sessionSummary(entries, exercises, person.id, date);
     if (exerciseIds.length === 0) continue;
 
     const list = exerciseIds.map((id) => {
       const exercise = exerciseById.get(id) ?? { id, name: id, kind: 'strength' };
       const rows = entries.filter((e) => e.person_id === person.id && e.date === date && e.exercise === id);
-      return exerciseText(exercise, rows, prEntryIds);
+      return exerciseText(exercise, rows, prs.includes(id), prEntryIds);
     });
+    const opening = `${escapeMarkdown(person.name)} worked out today ✅ ->`;
 
     messages.push({
       personId: person.id,
       payload: {
         username: 'FRIFT',
         allowed_mentions: { parse: [] }, // never ping anyone, whatever a name contains
-        content: `${escapeMarkdown(person.name)} worked out today ✅ -> ${list.join(', ')}.`,
+        content: prs.length > 0 ? `${opening}\n${list.map((line) => `* ${line}`).join('\n')}` : `${opening} ${list.join(', ')}.`,
       },
     });
   }
