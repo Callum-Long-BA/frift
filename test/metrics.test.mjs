@@ -199,6 +199,18 @@ test('% change is measured from each person\'s own first day', () => {
   assert.equal(byDate['2026-09-10'][seriesKey(2)], 50);
 });
 
+test("% change follows the best set's weight, not the total", () => {
+  const entries = [
+    set(1, '2026-09-01', 1, 100, 10), // best set 100 x 10 (total 100x10 + 50x10 = 1500)
+    set(1, '2026-09-01', 2, 50, 10),
+    set(1, '2026-09-08', 1, 110, 5), // best set 110 x 5 (total 550)
+  ];
+  const { rows } = buildChartData(entries, bench, 'pct');
+  assert.deepEqual(rows.map((r) => r[seriesKey(1)]), [0, 10]); // by total it would be -63.3
+  const [, second] = rows;
+  assert.equal(second.detail[seriesKey(1)].find((s) => s.counts).weight, 110); // the hover card bolds the best set
+});
+
 test('people logging on different days share one sorted x axis with gaps as null', () => {
   const entries = [set(1, '2026-09-08', 1, 50, 10), set(2, '2026-09-01', 1, 40, 10)];
   const { rows, personIds } = buildChartData(entries, bench, 'total');

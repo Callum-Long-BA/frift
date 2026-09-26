@@ -56,7 +56,7 @@ export function ChartTooltip({ active, payload, label, mode, kind, equalise = fa
       )}
       {anyFaded && (
         <p className="tip-note">
-          {mode === 'best' || mode === 'bw'
+          {mode !== 'total'
             ? 'Bold is the best set of the day. Faded sets are not counted.'
             : `Faded sets are earlier than the last ${COUNTED_SETS}, so they do not count.`}
         </p>
@@ -68,12 +68,12 @@ export function ChartTooltip({ active, payload, label, mode, kind, equalise = fa
 function subtitleFor(exercise, mode, equalise) {
   if (exercise.kind === 'cardio') return mode === 'pct' ? 'Minutes, change since first log' : 'Minutes per day';
   if (exercise.kind === 'reps') {
-    if (mode === 'pct') return 'Total reps, change since first log';
+    if (mode === 'pct') return 'Best set reps, change since first log';
     if (mode === 'best' || mode === 'bw') return 'Best set of the day, reps';
     return `Last ${COUNTED_SETS} sets, total reps`;
   }
   let text;
-  if (mode === 'pct') text = 'Total weight, change since first log';
+  if (mode === 'pct') text = 'Best set weight, change since first log';
   else if (mode === 'best') text = 'Best set of the day, kg';
   else if (mode === 'bw') text = 'Best set ÷ body weight';
   else text = `Last ${COUNTED_SETS} sets, weight × reps, kg`;

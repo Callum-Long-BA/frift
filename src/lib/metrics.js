@@ -260,7 +260,8 @@ export function bodyWeightOn(bodyWeights, personId, date) {
 }
 
 // mode: 'total' | 'pct' | 'best' | 'bw'.
-//   pct = % change in the total from that person's first logged day.
+//   pct = % change in the best set's weight (as in 'best') from that person's first logged
+//         day. Reps-only exercises use the best set's reps; cardio uses minutes.
 //   bw  = the best set's weight divided by body weight (see bodyWeightOn), e.g. 1.25.
 //         People with no body weight logged are left out. Reps-only and cardio charts have
 //         no weight to divide, so they show the same as 'best'.
@@ -269,7 +270,7 @@ export function bodyWeightOn(bodyWeights, personId, date) {
 // Returns rows shaped for a Recharts LineChart:
 //   { t, date, p<id>: value | null, detail: { p<id>: sets } }
 export function buildChartData(entries, exercise, mode, { equalise = false, bodyWeights = [] } = {}) {
-  const summaries = dailySummaries(entries, exercise, mode === 'best' || mode === 'bw' ? 'best' : 'total', { equalise });
+  const summaries = dailySummaries(entries, exercise, mode === 'total' ? 'total' : 'best', { equalise });
   const perPerson = new Map();
   const allDates = new Set();
 
