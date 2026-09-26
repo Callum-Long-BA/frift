@@ -12,7 +12,6 @@ import AddEntryDialog from './components/AddEntryDialog.jsx';
 import AddExerciseDialog from './components/AddExerciseDialog.jsx';
 import ActivityStrip from './components/ActivityStrip.jsx';
 import ActivityLog from './components/ActivityLog.jsx';
-import SheetsInfo from './components/SheetsInfo.jsx';
 import AddExerciseTile from './components/AddExerciseTile.jsx';
 import PasscodeGate from './components/PasscodeGate.jsx';
 
@@ -211,7 +210,6 @@ export default function App() {
             <ActivityLog people={themedPeople} entries={entries} exercises={exercises} />
           </>
         )}
-        <SheetsInfo />
       </ControlPanel>
 
       <div className="zone zone-weights" role="region" aria-labelledby="zone-weights-title">

@@ -227,7 +227,7 @@ fieldset {
    Each section has a fixed column, so nothing shifts while the data is still loading. */
 .control {
   display: grid;
-  grid-template-columns: minmax(13rem, 16rem) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 0.7fr);
+  grid-template-columns: minmax(13rem, 16rem) minmax(0, 1.5fr) minmax(0, 1.7fr);
   grid-template-rows: minmax(0, 1fr);
   gap: 16px 20px;
   padding: 18px;
@@ -261,10 +261,6 @@ fieldset {
   grid-column: 3;
 }
 
-.control .sheets {
-  grid-column: 4;
-}
-
 /* Sections after the first sit behind a divider. Content shrinks rather than scrolls. */
 .control-section {
   display: flex;
@@ -289,27 +285,22 @@ fieldset {
   color: var(--a1-muted);
 }
 
-/* On narrower screens the four sections cannot share one fixed-height row, so the top
-   tile alone grows: 2 x 2 on a tablet, one above another on a phone. */
+/* On narrower screens the three sections cannot share one fixed-height row, so the top
+   tile alone grows: controls and activity side by side with the log below on a tablet,
+   one above another on a phone. */
 @media (max-width: 1180px) {
   .control {
     height: auto;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
     grid-template-rows: auto auto;
   }
-  .control .log,
-  .control .sheets {
+  .control .log {
+    grid-column: 1 / -1;
     grid-row: 2;
     padding-top: 16px;
-    border-top: 1px solid var(--a1-border);
-  }
-  .control .log {
-    grid-column: 1;
     padding-left: 0;
+    border-top: 1px solid var(--a1-border);
     border-left: 0;
-  }
-  .control .sheets {
-    grid-column: 2;
   }
 }
 
@@ -868,18 +859,6 @@ fieldset {
 .log-prs.is-none {
   color: var(--a1-muted);
   opacity: 0.7;
-}
-
-/* ---------- Google Sheets placeholder ---------- */
-
-.soon-tag {
-  align-self: flex-start;
-  padding: 2px 10px;
-  border: 1px dashed var(--a1-field-line);
-  border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--a1-muted);
 }
 
 /* ---------- Passcode gate ---------- */
