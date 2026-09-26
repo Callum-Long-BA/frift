@@ -90,6 +90,7 @@ export default function ExerciseChart({
   equalise = false,
   loading,
   onAdd,
+  axisStart,
 }) {
   const { rows, personIds } = useMemo(
     () => buildChartData(entries, exercise, mode, { equalise, bodyWeights }),
@@ -119,6 +120,7 @@ export default function ExerciseChart({
     >
       {(full) => (
         <LinesChart
+          axisStart={axisStart}
           rows={rows}
           personIds={personIds}
           people={people}

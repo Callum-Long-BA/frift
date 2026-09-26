@@ -61,7 +61,7 @@ function subtitleFor(runType, tempoDistance) {
 // The Running tile. A dropdown picks which run type is charted (easy, tempo or intervals),
 // and for tempo a switch picks 5K, 10K or all distances. Both choices are remembered in
 // this browser. The + button logs a run of the type currently shown.
-export default function RunningChart({ exercise, people, entries, me, loading, onAdd }) {
+export default function RunningChart({ exercise, people, entries, me, loading, onAdd, axisStart }) {
   const [runType, setRunType] = useState(() => {
     const stored = readStored(RUN_TYPE_KEY);
     return RUN_TYPES.includes(stored) ? stored : 'easy';
@@ -135,6 +135,7 @@ export default function RunningChart({ exercise, people, entries, me, loading, o
     >
       {(full) => (
         <LinesChart
+          axisStart={axisStart}
           rows={rows}
           personIds={personIds}
           people={people}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Brush, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CHART_RANGES, TILE_RANGE } from '../lib/constants.js';
-import { DAY_MS, chartRangeStart, formatDay, pickTicks, seriesKey, todayString } from '../lib/metrics.js';
+import { DAY_MS, chartRangeStart, evenTicks, formatDay, pickTicks, splitAtGaps, toTimestamp, todayString } from '../lib/metrics.js';
 import { CHART } from '../lib/theme.js';
 
 // One line per person over time, shared by every chart tile. The selected person's line is
@@ -12,6 +12,10 @@ import { CHART } from '../lib/theme.js';
 // On a tile it shows the last 8 weeks. With `full` (the expanded view) it starts on
 // everything, drawn bigger, with range buttons (8W, 3M, 6M, 1Y, All) and a slider under the
 // chart whose handles zoom into any stretch of dates.
+//
+// The date axis runs from `axisStart` (the first date logged in this chart's section, so
+// every chart in a section lines up) or the range's start if later, to today, with evenly
+// spaced labels. A person's line breaks where they went more than 8 weeks between sessions.
 export default function LinesChart({
   rows,
   personIds,
@@ -25,23 +29,39 @@ export default function LinesChart({
   yDomain,
   zeroLine = false,
   full = false,
+  axisStart,
 }) {
   const [range, setRange] = useState('all');
   const [zoom, setZoom] = useState(null); // { startIndex, endIndex } from the slider
   const [resets, setResets] = useState(0); // bumping this redraws the slider at full width
 
+  const today = todayString();
+  const from = chartRangeStart(today, full ? range : TILE_RANGE);
+  const shown = useMemo(() => (from ? rows.filter((r) => r.date >= from) : rows), [rows, from]);
+  const { rows: split, lines } = useMemo(() => splitAtGaps(shown, personIds), [shown, personIds]);
+
+  // One line per person per stretch of training; the selected person's are drawn last, on top.
   const drawn = useMemo(() => {
     const byId = new Map(people.map((p) => [p.id, p]));
-    return personIds
-      .map((id) => byId.get(id))
-      .filter(Boolean)
-      .sort((a, b) => Number(a.id === me?.id) - Number(b.id === me?.id));
-  }, [people, personIds, me]);
+    return lines
+      .map((line) => ({ ...line, person: byId.get(line.personId) }))
+      .filter((line) => line.person)
+      .sort((a, b) => Number(a.personId === me?.id) - Number(b.personId === me?.id));
+  }, [people, lines, me]);
 
-  const from = chartRangeStart(todayString(), full ? range : TILE_RANGE);
-  const shown = useMemo(() => (from ? rows.filter((r) => r.date >= from) : rows), [rows, from]);
-  const zoomed = full && zoom ? shown.slice(zoom.startIndex, zoom.endIndex + 1) : shown;
-  const ticks = useMemo(() => pickTicks(zoomed, full ? 8 : 4), [zoomed, full]);
+  let axisFrom = axisStart ?? shown[0]?.date ?? today;
+  if (from && from > axisFrom) axisFrom = from;
+  const zooming = Boolean(full && zoom);
+  const zoomed = zooming ? split.slice(zoom.startIndex, zoom.endIndex + 1) : split;
+  const ticks = useMemo(
+    () => (zooming ? pickTicks(zoomed, 8) : evenTicks(axisFrom, today, full ? 8 : 4)),
+    [zooming, zoomed, axisFrom, today, full],
+  );
+  // Zoomed in with the slider, the axis follows the chosen stretch; otherwise it is the
+  // section's shared range, so charts side by side line up.
+  const xDomain = zooming
+    ? [(min) => min - DAY_MS, (max) => max + DAY_MS]
+    : [toTimestamp(axisFrom) - DAY_MS, toTimestamp(today) + DAY_MS];
 
   if (rows.length === 0) return <p className="chart-empty">{emptyText}</p>;
 
@@ -63,13 +83,14 @@ export default function LinesChart({
       </p>
     ) : (
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={shown} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+        <LineChart data={split} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
           <CartesianGrid stroke={CHART.grid} vertical={false} />
           <XAxis
             dataKey="t"
             type="number"
             scale="time"
-            domain={[(min) => min - DAY_MS, (max) => max + DAY_MS]}
+            domain={xDomain}
+            allowDataOverflow
             ticks={ticks}
             tickFormatter={formatDay}
             tick={{ fontSize, fill: CHART.tick }}
@@ -93,15 +114,15 @@ export default function LinesChart({
             wrapperStyle={{ zIndex: 20, outline: 'none' }}
             isAnimationActive={false}
           />
-          {drawn.map((person) => {
+          {drawn.map(({ key, person }) => {
             const isMe = person.id === me?.id;
             const opacity = me && !isMe ? 0.3 : 1;
             const scale = full ? 1.25 : 1;
             return (
               <Line
-                key={person.id}
+                key={key}
                 type="linear"
-                dataKey={seriesKey(person.id)}
+                dataKey={key}
                 name={person.name}
                 stroke={person.colour}
                 strokeWidth={(isMe ? 4 : 2) * scale}

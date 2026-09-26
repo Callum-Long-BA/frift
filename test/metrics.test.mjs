@@ -12,6 +12,8 @@ import {
   weekGrid,
   recentSessions,
   chartRangeStart,
+  splitAtGaps,
+  evenTicks,
   bodyWeightOn,
   runningChartData,
   formatDuration,
@@ -546,4 +548,36 @@ test('chartRangeStart: 8 weeks is this week plus the 7 before, from a Monday', (
   assert.equal(chartRangeStart('2026-09-27', '8w'), '2026-08-03'); // Sunday, same week
   assert.equal(chartRangeStart('2026-09-25', '3m'), '2026-06-26');
   assert.equal(chartRangeStart('2026-09-25', 'all'), null);
+});
+
+// ---------- line gaps and shared axes ----------
+
+const day = (date, values) => ({ t: Date.parse(`${date}T00:00:00Z`), date, detail: {}, ...values });
+
+test('splitAtGaps breaks a line after more than 8 weeks without a session, and only then', () => {
+  const rows = [
+    day('2026-01-05', { p1: 100, p2: 50 }),
+    day('2026-03-02', { p1: 105, p2: null }), // 56 days later: exactly 8 weeks, still joined
+    day('2026-05-04', { p1: 90, p2: 55 }), // 63 days later for p1: a new line
+    day('2026-05-11', { p1: 95, p2: null }),
+  ];
+  rows[0].detail.p1 = ['sets'];
+  const { rows: out, lines } = splitAtGaps(rows, [1, 2]);
+  assert.deepEqual(lines, [
+    { personId: 1, key: 'p1_0' },
+    { personId: 1, key: 'p1_1' },
+    { personId: 2, key: 'p2_0' },
+    { personId: 2, key: 'p2_1' }, // p2: 5 Jan -> 4 May is 119 days
+  ]);
+  assert.deepEqual(out.map((r) => [r.p1_0, r.p1_1]), [[100, undefined], [105, undefined], [undefined, 90], [undefined, 95]]);
+  assert.deepEqual(out[0].detail.p1_0, ['sets']); // hover detail follows the segment
+  assert.equal(rows[0].p1_0, undefined); // the input is not changed
+});
+
+test('evenTicks: the same evenly spaced dates for every chart sharing a range', () => {
+  const ticks = evenTicks('2026-08-03', '2026-09-26', 4);
+  assert.equal(ticks.length, 4);
+  assert.equal(new Date(ticks[0]).toISOString().slice(0, 10), '2026-08-03');
+  assert.equal(new Date(ticks[3]).toISOString().slice(0, 10), '2026-09-26');
+  assert.deepEqual(evenTicks('2026-09-26', '2026-09-26', 4), [Date.parse('2026-09-26T00:00:00Z')]);
 });
