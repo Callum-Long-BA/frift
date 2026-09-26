@@ -63,9 +63,9 @@ Sets are stored one row per set. All the chart maths happens in the browser (`sr
 | Mode | What one point on a chart means |
 |---|---|
 | **Total weight** | For one person, one exercise and one day: the sum of weight × reps over the **last 3 sets** of that day. Only 3 sets count, so someone doing 5 sets does not look stronger than someone doing 3. |
-| **% change** | The total weight above, shown as % change from that person's **own first logged day** for that exercise. Every line starts at 0%. A person whose first value is zero is left out, because change from zero is undefined. |
+| **% change** | The **best set's weight** (the same set Best set picks, below), shown as % change from that person's **own first logged day** for that exercise. Every line starts at 0%. A person whose first value is zero is left out, because change from zero is undefined. |
 | **Best set** | The day's best set is the one with the highest weight × reps, looking at **all** sets that day (not only the last 3). The vertical axis is that set's **weight**; hover a point to see its reps. |
-| **Reps-only exercises** | Reps stand in for weight × reps: **total** is the reps over the last 3 sets, **% change** is change in that total, and **best set** is the most reps in one set. Equalise does not apply. |
+| **Reps-only exercises** | Reps stand in for weight × reps: **total** is the reps over the last 3 sets, **best set** is the most reps in one set, and **% change** is change in that best set's reps. Equalise does not apply. |
 | **× BW** | The best set's weight (as in Best set, doubled for dumbbells when Equalise is on) divided by that person's body weight: the latest reading on or before that day, or their first reading for earlier days. 100 kg at 80 kg body weight is 1.25×. People with no body weight logged are left out. Reps-only and cardio charts show the same as Best set. |
 | **Cardio** (any mode) | Minutes per day. |
 | **Running** (own switch, ignores the mode) | Easy: km per day. Tempo: fastest pace that day at the chosen distance. Intervals: total time ÷ total distance for the session. |
@@ -76,7 +76,7 @@ Other rules:
 - **Set numbers** continue through the day. If you logged sets 1 and 2 this morning, the next set you add is set 3.
 - **Equalise** multiplies the weight of dumbbell sets by 2, in every mode. Dumbbell weights are entered as the weight of **one** dumbbell, so doubling gives the total moved and makes dumbbell and barbell lifting comparable. It can change which set counts as "best" when it is on. Sets with no equipment recorded (older entries) count as barbell.
 - **Several people, different dates.** The x axis is a shared date axis. Lines join up across days a person did not train.
-- **Hover card.** In total and % change modes, the last 3 sets are bold and earlier sets are faded (they don't count). In best set mode only the best set is bold. Dumbbell sets are tagged "DB".
+- **Hover card.** In Total mode, the last 3 sets are bold and earlier sets are faded (they don't count). In the other modes only the best set is bold. Dumbbell sets are tagged "DB".
 
 Changing how many sets count: `COUNTED_SETS` in `src/lib/constants.js`.
 
