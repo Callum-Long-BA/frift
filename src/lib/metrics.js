@@ -322,6 +322,46 @@ export function chartRangeStart(today, range) {
   return null;
 }
 
+// A person's line breaks where they went more than this long between logged sessions, so
+// separate stretches of training are not joined by one long line.
+export const LINE_GAP_DAYS = 56;
+
+// Splits each person's line into segments at gaps longer than `gapDays`. Returns the rows
+// with each value also stored under a per-segment key (p<id>_<n>, with its hover detail
+// copied alongside), and `lines`: [{ personId, key }], one per segment, to draw.
+export function splitAtGaps(rows, personIds, gapDays = LINE_GAP_DAYS) {
+  const out = rows.map((r) => ({ ...r, detail: { ...r.detail } }));
+  const lines = [];
+  for (const personId of personIds) {
+    const key = seriesKey(personId);
+    let segment = -1;
+    let last = null;
+    for (const row of out) {
+      const value = row[key];
+      if (value === null || value === undefined) continue;
+      if (last === null || row.t - last > gapDays * DAY_MS) {
+        segment += 1;
+        lines.push({ personId, key: `${key}_${segment}` });
+      }
+      last = row.t;
+      row[`${key}_${segment}`] = value;
+      if (row.detail[key]) row.detail[`${key}_${segment}`] = row.detail[key];
+    }
+  }
+  return { rows: out, lines };
+}
+
+// `count` evenly spaced day timestamps from `from` to `to` ('YYYY-MM-DD'), for x-axis labels
+// that are the same on every chart sharing that range.
+export function evenTicks(from, to, count) {
+  const start = toTimestamp(from);
+  const end = toTimestamp(to);
+  if (end <= start || count < 2) return [start];
+  const ticks = [];
+  for (let i = 0; i < count; i++) ticks.push(start + Math.round(((end - start) / (count - 1) / DAY_MS) * i) * DAY_MS);
+  return [...new Set(ticks)];
+}
+
 // Up to `max` evenly spread x-axis ticks, always on real logged dates.
 export function pickTicks(rows, max = 4) {
   if (rows.length === 0) return undefined;

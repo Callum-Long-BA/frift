@@ -130,6 +130,16 @@ export default function App() {
   const weightExercises = exercises.filter((e) => e.kind === 'strength');
   const ccExercises = exercises.filter((e) => e.kind !== 'strength');
 
+  // Every chart in a section shares one date axis, starting at the first date anything in
+  // that section was logged (see LinesChart).
+  const kindOf = new Map(exercises.map((e) => [e.id, e.kind]));
+  const axisStart = { weights: null, cc: null };
+  for (const e of entries) {
+    const section = kindOf.get(e.exercise) === 'strength' ? 'weights' : 'cc';
+    if (!axisStart[section] || e.date < axisStart[section]) axisStart[section] = e.date;
+  }
+  const axisStartFor = (exercise) => axisStart[exercise.kind === 'strength' ? 'weights' : 'cc'] ?? undefined;
+
   const renderChart = (exercise) => (
     <ErrorBoundary
       key={exercise.id}
@@ -145,6 +155,7 @@ export default function App() {
       {exercise.kind === 'running' ? (
         <RunningChart
           exercise={exercise}
+          axisStart={axisStartFor(exercise)}
           people={themedPeople}
           entries={entries}
           me={me}
@@ -157,6 +168,7 @@ export default function App() {
       ) : (
         <ExerciseChart
           exercise={exercise}
+          axisStart={axisStartFor(exercise)}
           people={themedPeople}
           entries={entries}
           bodyWeights={bodyWeights}
