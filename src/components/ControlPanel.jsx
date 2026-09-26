@@ -73,7 +73,7 @@ function BodyWeightField({ me, latest, onSave }) {
 }
 
 // The full-width top tile. Its first section is identity and chart mode; the other
-// sections (activity grid, activity log, Google Sheets) are passed in as children.
+// sections (activity grid, activity log) are passed in as children.
 // The activity grid's name column doubles as the key for line colours.
 export default function ControlPanel({
   people,
