@@ -57,7 +57,7 @@ export function ChartTooltip({ active, payload, label, mode, kind, equalise = fa
       {anyFaded && (
         <p className="tip-note">
           {mode !== 'total'
-            ? 'Bold is the best set of the day. Faded sets are not counted.'
+            ? 'Bold is the heaviest set of the day. Faded sets are not counted.'
             : `Faded sets are earlier than the last ${COUNTED_SETS}, so they do not count.`}
         </p>
       )}
@@ -70,11 +70,11 @@ function subtitleFor(exercise, mode, equalise) {
   if (exercise.kind === 'reps') {
     if (mode === 'pct') return 'Best set reps, change since first log';
     if (mode === 'best' || mode === 'bw') return 'Best set of the day, reps';
-    return `Last ${COUNTED_SETS} sets, total reps`;
+    return 'Total reps per day';
   }
   let text;
   if (mode === 'pct') text = 'Best set weight, change since first log';
-  else if (mode === 'best') text = 'Best set of the day, kg';
+  else if (mode === 'best') text = 'Heaviest set of the day, kg';
   else if (mode === 'bw') text = 'Best set ÷ body weight';
   else text = `Last ${COUNTED_SETS} sets, weight × reps, kg`;
   return equalise && exercise.equipment_choice ? `${text}. Dumbbells doubled.` : text;

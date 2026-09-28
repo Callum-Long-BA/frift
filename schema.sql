@@ -139,3 +139,18 @@ create table if not exists body_weights (
 -- Sheet by the 6pm sync (api/sheet-sync.js). The sync only ever replaces 'sheet' rows.
 alter table entries add column if not exists source text check (source in ('sheet'));
 alter table body_weights add column if not exists source text check (source in ('sheet'));
+
+-- Every cell the 6pm sheet sync has seen, so it imports each one once, dated the day it was
+-- synced, and can update the set it created if the cell is edited later. `cell` is
+-- 'tab:row:column' (or 'tab:row:weight' for a body weight). entry_id / bw_date point at what
+-- the cell created; both are empty for cells recorded without importing (the first run marks
+-- everything already in the sheet that way).
+create table if not exists sheet_cells (
+  sheet      text not null,
+  cell       text not null,
+  value      text not null,
+  entry_id   int references entries(id) on delete set null,
+  bw_date    date,
+  updated_at timestamptz not null default now(),
+  primary key (sheet, cell)
+);

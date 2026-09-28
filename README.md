@@ -64,8 +64,8 @@ Sets are stored one row per set. All the chart maths happens in the browser (`sr
 |---|---|
 | **Total weight** | For one person, one exercise and one day: the sum of weight × reps over the **last 3 sets** of that day. Only 3 sets count, so someone doing 5 sets does not look stronger than someone doing 3. |
 | **% change** | The **best set's weight** (the same set Best set picks, below), shown as % change from that person's **own first logged day** for that exercise. Every line starts at 0%. A person whose first value is zero is left out, because change from zero is undefined. |
-| **Best set** | The day's best set is the one with the highest weight × reps, looking at **all** sets that day (not only the last 3). The vertical axis is that set's **weight**; hover a point to see its reps. |
-| **Reps-only exercises** | Reps stand in for weight × reps: **total** is the reps over the last 3 sets, **best set** is the most reps in one set, and **% change** is change in that best set's reps. Equalise does not apply. |
+| **Best set** | The day's best set is the **heaviest** set, looking at **all** sets that day (not only the last 3). If two sets share the top weight, the one with more reps wins. The vertical axis is that set's **weight**; hover a point to see its reps. |
+| **Reps-only exercises** | Reps stand in for weight × reps: **total** is the reps of **every** set that day (not only the last 3), **best set** is the most reps in one set, and **% change** is change in that best set's reps. Equalise does not apply. |
 | **× BW** | The best set's weight (as in Best set, doubled for dumbbells when Equalise is on) divided by that person's body weight: the latest reading on or before that day, or their first reading for earlier days. 100 kg at 80 kg body weight is 1.25×. People with no body weight logged are left out. Reps-only and cardio charts show the same as Best set. |
 | **Cardio** (any mode) | Minutes per day. |
 | **Running** (own switch, ignores the mode) | Easy: km per day. Tempo: fastest pace that day at the chosen distance. Intervals: total time ÷ total distance for the session. |
@@ -458,25 +458,28 @@ You should see two rows: `entries / equipment` and `exercises / equipment_choice
 
 ## Daily sheet sync
 
-Kenneth and Kyle keep their own training spreadsheets. At **6pm UK time** every day FRIFT reads both and copies in anything new, so their sets appear in FRIFT (and in the 8pm Discord post) without logging them twice. Only sets dated **24 Sep 2026 or later** are read; everything before that was imported once by hand.
+Kenneth and Kyle keep their own training spreadsheets. At **6pm UK time** every day FRIFT reads both and copies in anything new, so their sets appear in FRIFT (and in the 8pm Discord post) without logging them twice. **New data is dated the day it is synced**, not the date written in the sheet.
 
 How each sheet is read lives in `api/_sheets.js` (`SHEETS`):
 
-| Person | Dates | Notes |
-|---|---|---|
-| Kenneth | Rows are "Week N", with Week 10 = w/c Mon 21 Sep 2026. Day 1, 2, 3, 4 = Mon, Tue, Thu, Fri. | Tabs "2026 Gym Progression" and "2026 Gym Progression - 2". Names in the row under "Day N". |
-| Kyle | The date written in each Day column. | First tab, from row 9 down. Names beside "Day N". The Weight column (date, then e.g. `96.6kg`) is body weight. |
+| Person | Layout |
+|---|---|
+| Kenneth | Tabs "2026 Gym Progression" and "2026 Gym Progression - 2". "Week N" rows; names in the row under "Day N". |
+| Kyle | First tab, from row 9 down. Names beside "Day N". The Weight column (date, then e.g. `96.6kg`) is body weight. |
 
 Each sheet also has a **name map** from its exercise names to FRIFT's (for example Kenneth's "Dumbbell press" is Bench press, marked dumbbell; Kyle's "Cable Row" is Seated row). Set cells are `60 x 8` or `15kg x 13`; blank and `X` cells mean nothing was done.
 
-**What a run does**, for each person, exercise and day:
+**What a run does.** FRIFT remembers every set cell it has seen (by tab, row and column, in the `sheet_cells` table):
 
-- Nothing in FRIFT yet: the sheet's sets are added (marked `source = 'sheet'`).
-- Only sheet sets there, and the sheet has changed since (a set added, a typo fixed): they are **replaced** with what the sheet says now.
-- Anything logged **in the app** for that exercise and day: left alone. The app always wins.
-- Body weight works the same way; a reading logged in the app is never replaced.
+- **A cell filled in since the last run** becomes a set **dated that day** (the day of the sync), numbered after anything already logged for that exercise that day, and marked `source = 'sheet'`.
+- **A cell changed after it was imported** (a typo fixed) updates the set it created. That set keeps its date.
+- **Sets logged in the app** are never touched.
+- **Body weight** (Kyle's Weight column) works the same way: a new reading is dated the sync day, and a reading logged in the app that day is never replaced.
+- **Clearing a cell** does not delete anything from FRIFT; delete it in the app.
 
-Deleting a whole exercise-day from a sheet does not delete it from FRIFT; delete it in the app.
+**The first run** after this was introduced recorded as done, without importing: the hand-imported backlog (anything the sheets date before 24 Sep 2026), and any day and exercise that already had sets in FRIFT. Anything else still in the sheets that had never been synced was imported then, dated that day.
+
+**Keep rows in place.** Cells are recognised by position, so inserting or deleting rows *above* existing data makes those cells look new, and they would be imported again. Adding new rows at the bottom, or a new block of rows further down, is fine.
 
 **When something cannot be imported** (an exercise name not in the map yet, a cell that is not weight x reps, a sheet that cannot be read), it is skipped and FRIFT posts one line per sheet in the Discord channel, e.g. *⚠️ FRIFT sheet sync for Kyle: not sure which FRIFT exercise "Pec deck" is, so it was skipped.* Add the name to that sheet's map in `api/_sheets.js` (or add the exercise first) and deploy; the next run picks up everything that was skipped. The warning repeats each day until it is fixed.
 
@@ -484,7 +487,7 @@ Deleting a whole exercise-day from a sheet does not delete it from FRIFT; delete
 
 **Setting it up:**
 
-1. Run the latest `schema.sql` in Neon (it adds the `source` columns).
+1. Run the latest `schema.sql` in Neon (it adds the `source` columns and the `sheet_cells` table).
 2. Both sheets must stay shared as **Anyone with the link: Viewer**.
 3. In Vercel > Settings > Environment Variables, add `KENNETH_SHEET_ID` and `KYLE_SHEET_ID` (the part of each sheet's address between `/d/` and `/edit`). `CRON_SECRET` is already set for the Discord post. Redeploy.
 4. To run it now instead of waiting for 6pm, in the browser console on the live site:

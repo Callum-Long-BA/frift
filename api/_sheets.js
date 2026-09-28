@@ -4,9 +4,11 @@
 // Both sheets are grids: a header row of "Day 1" ... "Day 4" with the exercise names
 // beside or below them, then one row per week, three set cells per exercise ("60 x 8",
 // "15kg x 13"). Blank and X cells mean nothing was done.
-
-// Sets are only read for this date onwards; everything earlier was imported by hand.
-export const START_DATE = '2026-09-24';
+//
+// Each set cell is tracked by its position (tab, row, column). A cell the sync has not seen
+// before becomes a set dated the day it is synced; the dates written in the sheet are not
+// used for that. The sheet's dates only matter on the very first run, to tell what was
+// already imported (see planCells).
 
 // One entry per sheet. `idEnv` names the environment variable holding the Google Sheet's id
 // (the long part of its URL), so the ids are not in the code. The sheet must be shared as
@@ -19,6 +21,7 @@ export const SHEETS = [
     idEnv: 'KENNETH_SHEET_ID',
     tabs: [{ sheet: '2026 Gym Progression' }, { sheet: '2026 Gym Progression - 2' }],
     // Rows are "Week N"; Week 10 is w/c Mon 21 Sep 2026. Day 1-4 are Mon, Tue, Thu, Fri.
+    // (Only used on the first run, to recognise what was imported before.)
     dates: { type: 'weeks', anchorWeek: 10, anchorMonday: '2026-09-21', dayOffsets: { 1: 0, 2: 1, 3: 3, 4: 4 } },
     fromRow: 1,
     map: {
@@ -47,7 +50,7 @@ export const SHEETS = [
     person: 'Kyle',
     idEnv: 'KYLE_SHEET_ID',
     tabs: [{ gid: '0' }],
-    // Each Day column holds the date that session was done (22/09/2026).
+    // Each Day column holds a date (22/09/2026). Only used on the first run, as above.
     dates: { type: 'dated' },
     fromRow: 9,
     // A "Weight" column of date and "96.6kg" pairs: body weight.
@@ -149,16 +152,20 @@ const isNameCell = (cell) => {
   return t !== '' && !DAY_RE.test(t) && !sheetDate(t) && !KG_RE.test(t) && t.toLowerCase() !== 'weight';
 };
 
-// Reads one tab. `config` is an entry of SHEETS. Returns
-//   { sets: [{ date, name, cell, weight, reps, line }], bodyWeights: [{ date, kg, line }], problems }
-// covering every row from config.fromRow down (the caller filters by date). `sets` are in
-// cell order, so an exercise's sets on a day stay in the order they were written.
-export function readTab(csvText, config) {
+// Everything the sheets date before this was imported once by hand (the backlog files).
+export const BACKLOG_BEFORE = '2026-09-24';
+
+// Reads one tab. `config` is an entry of SHEETS; `tab` is the tab's position in config.tabs.
+// Returns every non-blank set cell from config.fromRow down, in sheet order:
+//   cells: [{ key, line, name, date, text, set: { weight, reps } | null }]
+//   bodyWeights: [{ key, line, date, text, kg: number | null }]   (Kyle's Weight column)
+// `key` identifies the cell ('tab:row:column'); `date` is what the sheet says (null if none);
+// `set` is null when the cell is not weight x reps.
+export function readTab(csvText, config, tab = 0) {
   const text = String(csvText ?? '');
   const rows = parseCsv(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text); // drop a byte-order mark
-  const sets = [];
+  const cells = [];
   const bodyWeights = [];
-  const problems = [];
 
   // The body weight column is found by its "Weight" heading anywhere in the sheet.
   let weightCol = -1;
@@ -179,8 +186,11 @@ export function readTab(csvText, config) {
 
     if (weightCol !== -1) {
       const date = sheetDate(row[weightCol]);
-      const kg = KG_RE.exec(row[weightCol + 1] ?? '');
-      if (date && kg) bodyWeights.push({ date, kg: Number(kg[1]), line });
+      const value = String(row[weightCol + 1] ?? '').trim();
+      if (date && value) {
+        const kg = KG_RE.exec(value);
+        bodyWeights.push({ key: `${tab}:${line}:weight`, line, date, text: value, kg: kg ? Number(kg[1]) : null });
+      }
     }
 
     const dayCols = row.map((cell, c) => [c, DAY_RE.exec(cell)]).filter(([, m]) => m);
@@ -215,72 +225,88 @@ export function readTab(csvText, config) {
       }
       for (const { col: first, name } of exercises) {
         for (let k = 0; k < 3; k++) {
-          const cell = row[first + k] ?? '';
-          const set = sheetSet(cell);
+          const cellText = String(row[first + k] ?? '').trim();
+          const set = sheetSet(cellText);
           if (set === 'skip') continue;
-          if (!date) {
-            problems.push({ line, name, cell, message: `has "${cell}" but no date` });
-            continue;
-          }
-          if (!set) {
-            problems.push({ date, line, name, cell, message: `"${cell}" is not weight x reps` });
-            continue;
-          }
-          sets.push({ date, name, cell: k + 1, weight: set.weight, reps: set.reps, line });
+          cells.push({ key: `${tab}:${line}:${first + k}`, line, name, date, text: cellText, set });
         }
       }
     }
   }
-  return { sets, bodyWeights, problems };
+  return { cells, bodyWeights };
 }
 
-// Groups sets into sessions for FRIFT: Map<'date|exerciseId', { date, exercise, equipment,
-// sets: [{ weight, reps }] }>, keeping only dates from START_DATE to `today`. Names not in
-// config.map are returned in `unmapped`.
-export function sheetSessions(sets, config, today) {
-  const sessions = new Map();
+// Decides what one sync run does for one sheet, from the cells read and what the sync has
+// already recorded in `seen` (Map<key, { value, entry_id, bw_date }>, the sheet_cells table).
+//   newSets:        cells not seen before: add as sets dated today, in sheet order.
+//   updates:        seen cells whose text changed: update the set they created.
+//   remember:       cells to record without importing (see first run, below), or changed
+//                   cells whose set no longer exists.
+//   newBodyWeights, bwUpdates: the same for Kyle's Weight column.
+//   problems, unmapped: cells that could not be imported; they are retried next run.
+// First run (`seeding`, nothing seen yet): cells from the hand-imported backlog (dated before
+// BACKLOG_BEFORE), and cells for a day and exercise that already has sets in FRIFT
+// (`loggedDays`: 'date|exercise', from the earlier date-based sync or the app), are remembered
+// as already done, so nothing is imported twice. Anything else is imported, dated today. Body
+// weights likewise, with `bwDates` (days that already have a reading).
+export function planCells({ cells, bodyWeights = [], seen, config, today, seeding, loggedDays = new Set(), bwDates = new Set(), exerciseIds }) {
+  const plan = { newSets: [], updates: [], remember: [], newBodyWeights: [], bwUpdates: [], problems: [], unmapped: [] };
   const unmapped = new Set();
-  for (const s of sets) {
-    if (s.date < START_DATE || s.date > today) continue;
-    const mapped = config.map[s.name.toLowerCase()];
+  const missing = new Set();
+
+  for (const c of cells) {
+    const mapped = config.map[c.name.toLowerCase()];
+    const prior = seen.get(c.key);
+    if (prior) {
+      if (prior.value === c.text) continue;
+      if (!c.set) plan.problems.push({ line: c.line, name: c.name, message: `"${c.text}" is not weight x reps` });
+      else if (prior.entry_id && mapped) plan.updates.push({ key: c.key, entryId: prior.entry_id, weight: c.set.weight, reps: c.set.reps, value: c.text });
+      else plan.remember.push({ key: c.key, value: c.text });
+      continue;
+    }
+    if (seeding) {
+      const old = !c.date || c.date < BACKLOG_BEFORE;
+      const alreadyIn = mapped && c.date && loggedDays.has(`${c.date}|${mapped[0]}`);
+      if (old || alreadyIn) {
+        plan.remember.push({ key: c.key, value: c.text });
+        continue;
+      }
+    }
+    if (!c.set) {
+      plan.problems.push({ line: c.line, name: c.name, message: `"${c.text}" is not weight x reps` });
+      continue;
+    }
     if (!mapped) {
-      unmapped.add(s.name);
+      unmapped.add(c.name);
       continue;
     }
     const [exercise, equipment] = mapped;
-    const key = `${s.date}|${exercise}`;
-    if (!sessions.has(key)) sessions.set(key, { date: s.date, exercise, equipment, sets: [] });
-    sessions.get(key).sets.push({ weight: s.weight, reps: s.reps });
+    if (!exerciseIds.has(exercise)) {
+      missing.add(exercise);
+      continue;
+    }
+    plan.newSets.push({ key: c.key, exercise, equipment, weight: c.set.weight, reps: c.set.reps, value: c.text });
   }
-  return { sessions, unmapped: [...unmapped] };
-}
 
-// What to do for each sheet session, given the person's existing entries from START_DATE
-// on ([{ exercise, date, set_number, weight, reps, equipment, source }]). The sheet wins
-// for sessions that came from the sheet; anything logged in the app is never touched.
-//   add:       nothing logged yet for that exercise and day.
-//   replace:   only sheet sets there, and the sheet has changed.
-//   unchanged: only sheet sets there, and they match.
-//   app:       something was logged in the app for that exercise and day, so leave it.
-export function planSync(sessions, existing) {
-  const byKey = new Map();
-  for (const e of existing) {
-    const key = `${e.date}|${e.exercise}`;
-    if (!byKey.has(key)) byKey.set(key, []);
-    byKey.get(key).push(e);
+  for (const b of bodyWeights) {
+    const prior = seen.get(b.key);
+    if (prior) {
+      if (prior.value === b.text) continue;
+      if (b.kg === null) plan.problems.push({ line: b.line, name: 'Weight', message: `"${b.text}" is not a weight in kg` });
+      else if (prior.bw_date) plan.bwUpdates.push({ key: b.key, date: prior.bw_date, kg: b.kg, value: b.text });
+      else plan.remember.push({ key: b.key, value: b.text });
+      continue;
+    }
+    if (seeding && (!b.date || b.date < BACKLOG_BEFORE || bwDates.has(b.date))) {
+      plan.remember.push({ key: b.key, value: b.text });
+      continue;
+    }
+    if (b.kg === null) plan.problems.push({ line: b.line, name: 'Weight', message: `"${b.text}" is not a weight in kg` });
+    else plan.newBodyWeights.push({ key: b.key, kg: b.kg, value: b.text });
   }
-  const plan = { add: [], replace: [], unchanged: [], app: [] };
-  for (const [key, session] of sessions) {
-    const rows = (byKey.get(key) ?? []).sort((a, b) => a.set_number - b.set_number);
-    if (rows.length === 0) plan.add.push(session);
-    else if (rows.some((r) => r.source !== 'sheet')) plan.app.push(session);
-    else if (
-      rows.length === session.sets.length &&
-      rows.every((r, i) => r.weight === session.sets[i].weight && r.reps === session.sets[i].reps && (r.equipment ?? null) === session.equipment)
-    ) {
-      plan.unchanged.push(session);
-    } else plan.replace.push(session);
-  }
+
+  for (const exercise of missing) plan.problems.push({ name: exercise, message: 'is not an exercise in FRIFT' });
+  plan.unmapped = [...unmapped];
   return plan;
 }
 
