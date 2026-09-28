@@ -44,7 +44,8 @@ export default function AddEntryDialog({ exercise, person, entries, runType: ini
     [entries, person.id, exercise.id, date],
   );
   const firstNewSet = nextSetNumber(entries, person.id, exercise.id, date);
-  const countedIds = new Set(logged.slice(-COUNTED_SETS).map((r) => r.id));
+  // Weights: only the last few sets count toward Total. Reps-only: every set counts.
+  const countedIds = new Set((repsOnly ? logged : logged.slice(-COUNTED_SETS)).map((r) => r.id));
   const cardioDone = isCardio && logged.length > 0;
 
   const closeDialog = () => dialogRef.current?.close();
@@ -382,7 +383,7 @@ export default function AddEntryDialog({ exercise, person, entries, runType: ini
               Add another set
             </button>
             <p className="hint">
-              Only the last {COUNTED_SETS} sets of the day count toward the chart.
+              {repsOnly ? 'Every set of the day counts toward the total.' : `Only the last ${COUNTED_SETS} sets of the day count toward the chart.`}
               {!repsOnly && ' Assisted? Enter the assistance as a minus weight, e.g. -20.'}
             </p>
           </fieldset>

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SHEETS, START_DATE, planSync, readTab, sheetDate, sheetSessions, sheetSet, tabCsvUrl, warningMessage } from '../api/_sheets.js';
+import { SHEETS, planCells, readTab, sheetDate, sheetSet, tabCsvUrl, warningMessage } from '../api/_sheets.js';
 
 const kenneth = SHEETS.find((s) => s.key === 'kenneth');
 const kyle = SHEETS.find((s) => s.key === 'kyle');
@@ -33,31 +33,27 @@ const kennethCsv = [
   '"Week 11","27x5","","","Mystery move","","","","","",""',
 ].join('\n');
 
-test('Kenneth: week numbers become dates, Day 1 = Monday and Day 2 = Tuesday', () => {
-  const { sets, problems } = readTab(kennethCsv, { ...kenneth, dates: kenneth.dates });
-  const byDate = (d) => sets.filter((s) => s.date === d).map((s) => `${s.name} ${s.weight}x${s.reps}`);
-  assert.deepEqual(byDate('2026-09-21'), ['Tricep push down 26x5', 'Tricep push down 26x4', 'Tricep push down 26x3', 'Lat raises 9x9']);
-  assert.deepEqual(byDate('2026-09-22'), ['Lat pulldowns 54x9', 'Lat pulldowns 54x7', 'Lat pulldowns 54x5']);
-  assert.deepEqual(byDate('2026-09-28'), ['Tricep push down 27x5']);
-  assert.equal(problems.length, 1);
-  assert.equal(problems[0].date, '2026-09-28');
-  assert.match(problems[0].message, /not weight x reps/);
-});
-
-test('only dates from the start date up to today are synced, and unknown names are listed', () => {
-  const { sets } = readTab(kennethCsv, kenneth);
-  const { sessions, unmapped } = sheetSessions(
-    [...sets, { date: '2026-09-29', name: 'Pec deck', weight: 40, reps: 10 }],
-    kenneth,
-    '2026-09-29',
+test('readTab (Kenneth): every non-blank set cell, keyed by tab, row and column, with its sheet date', () => {
+  const { cells } = readTab(kennethCsv, kenneth, 1);
+  assert.deepEqual(
+    cells.map((c) => [c.key, c.name, c.date, c.text]),
+    [
+      ['1:3:1', 'Tricep push down', '2026-09-21', '26x5'],
+      ['1:3:2', 'Tricep push down', '2026-09-21', '26x4'],
+      ['1:3:3', 'Tricep push down', '2026-09-21', '26x3'],
+      ['1:3:4', 'Lat raises', '2026-09-21', '9x9'],
+      ['1:3:7', 'Lat pulldowns', '2026-09-22', '54x9'],
+      ['1:3:8', 'Lat pulldowns', '2026-09-22', '54x7'],
+      ['1:3:9', 'Lat pulldowns', '2026-09-22', '54x5'],
+      ['1:4:1', 'Tricep push down', '2026-09-28', '27x5'],
+      ['1:4:4', 'Lat raises', '2026-09-28', 'Mystery move'],
+    ],
   );
-  assert.ok(START_DATE > '2026-09-22');
-  assert.deepEqual([...sessions.keys()], ['2026-09-28|tricep_pushdown']);
-  assert.deepEqual(sessions.get('2026-09-28|tricep_pushdown'), { date: '2026-09-28', exercise: 'tricep_pushdown', equipment: null, sets: [{ weight: 27, reps: 5 }] });
-  assert.deepEqual(unmapped, ['Pec deck']);
+  assert.equal(cells.at(-1).set, null);
 });
 
-// Kyle: from row 9, names beside each Day cell, and the Day cell below holds the date.
+// Kyle: from row 9, names beside each Day cell, the Day cell below holds a date, and a
+// Weight column of date / "96.6kg" pairs.
 const kyleCsv = [
   ',,,,,,,,,,,,',
   ',Day 1,Dumbbell Bench Press,,,,,,,,,Weight ,',
@@ -67,44 +63,93 @@ const kyleCsv = [
   ',21/09/2026,30kg x 8,30kg x 7,30kg x 6,,25/09/2026,150kg x 4,,150kg x 4,,24/09/2026,95.1kg',
 ].join('\n');
 
-test('Kyle: rows before 9 are ignored; each Day has its own date; the Weight column is body weight', () => {
-  const { sets, bodyWeights } = readTab(kyleCsv, kyle);
-  assert.deepEqual(
-    sets.map((s) => `${s.date} ${s.name} ${s.weight}x${s.reps}`),
-    ['2026-09-21 Dumbbell Bench Press 30x8', '2026-09-21 Dumbbell Bench Press 30x7', '2026-09-21 Dumbbell Bench Press 30x6', '2026-09-25 Squat 150x4', '2026-09-25 Squat 150x4'],
-  );
-  assert.deepEqual(bodyWeights.map((b) => [b.date, b.kg]), [['2026-09-15', 96.6], ['2026-09-24', 95.1]]);
-  const { sessions } = sheetSessions(sets, kyle, '2026-09-25');
-  assert.deepEqual([...sessions.values()], [{ date: '2026-09-25', exercise: 'squat', equipment: 'barbell', sets: [{ weight: 150, reps: 4 }, { weight: 150, reps: 4 }] }]);
-});
-
-const session = (date, exercise, sets, equipment = null) => ({ date, exercise, equipment, sets });
-const row = (date, exercise, set_number, weight, reps, source = 'sheet', equipment = null) => ({ date, exercise, set_number, weight, reps, equipment, source });
-
-test('planSync: add new days, replace changed sheet days, leave matching ones and anything from the app', () => {
-  const sessions = new Map([
-    ['2026-09-24|squat', session('2026-09-24', 'squat', [{ weight: 100, reps: 5 }])],
-    ['2026-09-25|squat', session('2026-09-25', 'squat', [{ weight: 100, reps: 5 }, { weight: 100, reps: 4 }])],
-    ['2026-09-26|squat', session('2026-09-26', 'squat', [{ weight: 100, reps: 5 }])],
-    ['2026-09-27|squat', session('2026-09-27', 'squat', [{ weight: 100, reps: 5 }])],
+test('readTab (Kyle): rows before 9 are ignored; Weight column cells are body weights', () => {
+  const { cells, bodyWeights } = readTab(kyleCsv, kyle);
+  assert.deepEqual(cells.map((c) => [c.key, c.date, c.text]), [
+    ['0:10:2', '2026-09-21', '30kg x 8'],
+    ['0:10:3', '2026-09-21', '30kg x 7'],
+    ['0:10:4', '2026-09-21', '30kg x 6'],
+    ['0:10:7', '2026-09-25', '150kg x 4'],
+    ['0:10:9', '2026-09-25', '150kg x 4'],
   ]);
-  const existing = [
-    row('2026-09-25', 'squat', 1, 100, 5), // the sheet has since gained a second set
-    row('2026-09-26', 'squat', 1, 100, 5), // identical
-    row('2026-09-27', 'squat', 1, 90, 5, null), // logged in the app
-  ];
-  const plan = planSync(sessions, existing);
-  assert.deepEqual(plan.add.map((s) => s.date), ['2026-09-24']);
-  assert.deepEqual(plan.replace.map((s) => s.date), ['2026-09-25']);
-  assert.deepEqual(plan.unchanged.map((s) => s.date), ['2026-09-26']);
-  assert.deepEqual(plan.app.map((s) => s.date), ['2026-09-27']);
+  assert.deepEqual(bodyWeights.map((b) => [b.key, b.date, b.kg]), [['0:9:weight', '2026-09-15', 96.6], ['0:10:weight', '2026-09-24', 95.1]]);
 });
 
-test('planSync: a changed weight or equipment counts as a change', () => {
-  const sessions = new Map([['2026-09-24|bench_press', session('2026-09-24', 'bench_press', [{ weight: 30, reps: 8 }], 'dumbbell')]]);
-  assert.equal(planSync(sessions, [row('2026-09-24', 'bench_press', 1, 30, 8, 'sheet', 'dumbbell')]).unchanged.length, 1);
-  assert.equal(planSync(sessions, [row('2026-09-24', 'bench_press', 1, 32.5, 8, 'sheet', 'dumbbell')]).replace.length, 1);
-  assert.equal(planSync(sessions, [row('2026-09-24', 'bench_press', 1, 30, 8, 'sheet', null)]).replace.length, 1);
+const allExercises = new Set(Object.values(kenneth.map).map(([id]) => id));
+const plan = (overrides) =>
+  planCells({ cells: readTab(kennethCsv, kenneth).cells, seen: new Map(), config: kenneth, today: '2026-09-28', seeding: false, exerciseIds: allExercises, ...overrides });
+
+test('planCells: cells not seen before become new sets (dated by the sync, not the sheet), in sheet order', () => {
+  const p = plan({});
+  assert.deepEqual(p.newSets.map((s) => [s.exercise, s.weight, s.reps]), [
+    ['tricep_pushdown', 26, 5], ['tricep_pushdown', 26, 4], ['tricep_pushdown', 26, 3],
+    ['lateral_raise', 9, 9],
+    ['lat_pulldown', 54, 9], ['lat_pulldown', 54, 7], ['lat_pulldown', 54, 5],
+    ['tricep_pushdown', 27, 5],
+  ]);
+  assert.equal(p.problems.length, 1);
+  assert.match(p.problems[0].message, /"Mystery move" is not weight x reps/);
+  assert.ok(p.newSets.every((s) => !('date' in s)));
+});
+
+test('planCells: the first run records the backlog and any day already in FRIFT, and imports the rest', () => {
+  const p = plan({ seeding: true, loggedDays: new Set() });
+  assert.deepEqual(p.newSets.map((s) => s.key), ['0:4:1']); // Week 11 Monday: not backlog, not in FRIFT yet
+  assert.equal(p.remember.length, 7); // the seven Week 10 cells (21 and 22 Sep: the backlog)
+  assert.equal(p.problems.length, 1); // the unreadable Week 11 cell is reported, not recorded
+
+  const already = plan({ seeding: true, loggedDays: new Set(['2026-09-28|tricep_pushdown']) });
+  assert.deepEqual(already.newSets, []); // the old sync (or the app) already has that day
+});
+
+test('planCells: unchanged cells do nothing; edited cells update the set they made', () => {
+  const seen = new Map([
+    ['0:3:1', { value: '26x5', entry_id: 11 }],
+    ['0:3:2', { value: '26x4', entry_id: 12 }],
+  ]);
+  const cells = readTab(kennethCsv.replace('"26x4"', '"28x4"'), kenneth).cells.slice(0, 2);
+  const p = plan({ cells, seen });
+  assert.deepEqual(p.newSets, []);
+  assert.deepEqual(p.updates, [{ key: '0:3:2', entryId: 12, weight: 28, reps: 4, value: '28x4' }]);
+});
+
+test('planCells: an edited cell whose set is gone is just recorded; one edited to rubbish is reported', () => {
+  const cells = readTab(kennethCsv, kenneth).cells.slice(0, 2);
+  const seen = new Map([
+    ['0:3:1', { value: '25x5', entry_id: null }],
+    ['0:3:2', { value: '26x4', entry_id: 12 }],
+  ]);
+  const p = plan({ cells: [cells[0], { ...cells[1], text: 'oops', set: null }], seen });
+  assert.deepEqual(p.remember, [{ key: '0:3:1', value: '26x5' }]);
+  assert.equal(p.updates.length, 0);
+  assert.equal(p.problems.length, 1);
+});
+
+test('planCells: unmapped names and missing exercises are reported and retried later', () => {
+  const cells = [
+    { key: '0:5:1', line: 5, name: 'Pec deck', date: '2026-09-28', text: '40x10', set: { weight: 40, reps: 10 } },
+    { key: '0:5:4', line: 5, name: 'Lat raises', date: '2026-09-28', text: '9x9', set: { weight: 9, reps: 9 } },
+  ];
+  const p = plan({ cells, exerciseIds: new Set() });
+  assert.deepEqual(p.unmapped, ['Pec deck']);
+  assert.deepEqual(p.problems, [{ name: 'lateral_raise', message: 'is not an exercise in FRIFT' }]);
+  assert.deepEqual(p.remember, []); // not recorded, so the next run tries again
+});
+
+test('planCells: body weights are new, updated or recorded like set cells', () => {
+  const { bodyWeights } = readTab(kyleCsv, kyle);
+  const base = { cells: [], bodyWeights, config: kyle, today: '2026-09-28', exerciseIds: allExercises };
+  const first = planCells({ ...base, seen: new Map(), seeding: true, bwDates: new Set(['2026-09-24']) });
+  assert.deepEqual(first.newBodyWeights, []); // 15 Sep is backlog; 24 Sep already has a reading
+  assert.equal(first.remember.length, 2);
+  const missed = planCells({ ...base, seen: new Map(), seeding: true, bwDates: new Set() });
+  assert.deepEqual(missed.newBodyWeights.map((b) => b.kg), [95.1]); // 24 Sep was never synced
+
+  const later = planCells({ ...base, seeding: false, seen: new Map([['0:9:weight', { value: '96.6kg', bw_date: '2026-09-15' }], ['0:10:weight', { value: '95kg', bw_date: '2026-09-24' }]]) });
+  assert.deepEqual(later.bwUpdates, [{ key: '0:10:weight', date: '2026-09-24', kg: 95.1, value: '95.1kg' }]);
+
+  const fresh = planCells({ ...base, seeding: false, seen: new Map() });
+  assert.deepEqual(fresh.newBodyWeights.map((b) => b.kg), [96.6, 95.1]);
 });
 
 test('warningMessage: one line for Discord, or nothing when all went well', () => {

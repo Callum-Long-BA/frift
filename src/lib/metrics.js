@@ -77,8 +77,8 @@ function prTrack(entry, kind) {
 // beat every earlier session by that person (see prMeasure). For reps-only exercises the
 // record is the day's total reps (10 + 8 + 6 = 24) against every earlier day's total. A first
 // ever session of an exercise sets a baseline, not a record. `prEntryIds` holds the set that
-// made each record: the first set (by set number) to reach the session's best (none for
-// reps-only, where the whole day made it). Used by the activity log and the Discord post.
+// made each record: the set that reached the session's best (for weights, the one with the
+// most reps at that weight; none for reps-only, where the whole day made it). Used by the activity log and the Discord post.
 export function sessionSummary(entries, exercises, personId, date) {
   const kindOf = new Map(exercises.map((e) => [e.id, e.kind]));
   const rows = entries.filter((e) => e.person_id === personId && e.date === date).sort((a, b) => a.id - b.id);
@@ -101,7 +101,9 @@ export function sessionSummary(entries, exercises, personId, date) {
       if (r.exercise !== exerciseId) continue;
       const track = prTrack(r, kind);
       const held = best.get(track);
-      if (!held || prMeasure(r, kind) > prMeasure(held, kind)) best.set(track, r);
+      const better = !held || prMeasure(r, kind) > prMeasure(held, kind);
+      const tieOnReps = held && kind === 'strength' && prMeasure(r, kind) === prMeasure(held, kind) && r.reps > held.reps;
+      if (better || tieOnReps) best.set(track, r);
     }
     let isPr = false;
     for (const [track, top] of best) {
@@ -176,11 +178,11 @@ const factorFor = (row, equalise) => (equalise && row.equipment === 'dumbbell' ?
 // mode 'total' (default):
 //   value = sum of weight x reps over the LAST 3 sets (by set number) of the day.
 // mode 'best':
-//   the best set is the one with the highest weight x reps that day, from ALL sets.
-//   value = the WEIGHT of that set (doubled for equalised dumbbells).
+//   the best set is the HEAVIEST set that day (doubled for equalised dumbbells), from ALL
+//   sets; if two share the top weight, the one with more reps. value = its weight.
 //
-// Reps-only exercises (kind 'reps') have no weight, so reps stand in for weight x reps:
-// 'total' sums the reps of the last 3 sets and 'best' is the most reps in one set.
+// Reps-only exercises (kind 'reps') have no weight: 'total' sums the reps of EVERY set that
+// day and 'best' is the most reps in one set.
 // Cardio is minutes in either mode and has no sets.
 //
 // `sets` lists every set that day, with `counts: true` on the sets that
@@ -217,20 +219,18 @@ export function dailySummaries(entries, exercise, mode = 'total', { equalise = f
       const volume = (s) => (repsOnly ? s.reps : s.weight * s.factor * s.reps);
 
       if (mode === 'best') {
-        let bestIndex = 0;
-        let bestVolume = -Infinity;
-        sets.forEach((s, i) => {
-          const v = volume(s);
-          if (v > bestVolume) {
-            bestVolume = v;
-            bestIndex = i;
-          }
-        });
-        const best = sets[bestIndex];
+        // Heaviest weight wins (after Equalise); more reps breaks a tie. Reps-only: most reps.
+        let best = sets[0];
+        for (const s of sets.slice(1)) {
+          const heavier = s.weight * s.factor > best.weight * best.factor;
+          const sameWeight = s.weight * s.factor === best.weight * best.factor;
+          if (repsOnly ? s.reps > best.reps : heavier || (sameWeight && s.reps > best.reps)) best = s;
+        }
         best.counts = true;
         value = repsOnly ? best.reps : best.weight * best.factor;
       } else {
-        const counted = sets.slice(-COUNTED_SETS);
+        // Reps-only exercises total every set of the day; weights count only the last 3.
+        const counted = repsOnly ? sets : sets.slice(-COUNTED_SETS);
         counted.forEach((s) => {
           s.counts = true;
         });

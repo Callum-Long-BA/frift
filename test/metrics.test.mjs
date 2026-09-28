@@ -87,32 +87,38 @@ test('a custom exercise charts the same way as the originals', () => {
 
 // ---------- best set ----------
 
-test('best set plots the WEIGHT of the set with the highest weight x reps', () => {
+test('best set plots the weight of the heaviest set', () => {
   const entries = [
-    set(1, '2026-09-01', 1, 60, 8),  // 480
-    set(1, '2026-09-01', 2, 70, 8),  // 560  <- best, so y = 70
-    set(1, '2026-09-01', 3, 60, 6),  // 360
+    set(1, '2026-09-01', 1, 60, 8),
+    set(1, '2026-09-01', 2, 70, 8), // heaviest, so y = 70
+    set(1, '2026-09-01', 3, 60, 6),
   ];
   assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 70);
 });
 
 test('best set looks at ALL sets of the day, not just the last 3', () => {
   const entries = [
-    set(1, '2026-09-01', 1, 80, 10), // 800  <- best, but early
+    set(1, '2026-09-01', 1, 80, 10), // heaviest, but early
     set(1, '2026-09-01', 2, 60, 8),
     set(1, '2026-09-01', 3, 60, 8),
     set(1, '2026-09-01', 4, 60, 8),
     set(1, '2026-09-01', 5, 50, 8),
   ];
-  assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 80); // the early 80x10 set (800)
+  assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 80); // the early 80 x 10 set
   assert.equal(value(entries, bench, 1, '2026-09-01', 'total'), 480 + 480 + 400);
 });
 
-test('best set is chosen by weight x reps, so 60x8 beats 100x3 and y shows 60', () => {
-  const entries = [set(1, '2026-09-01', 1, 100, 3), set(1, '2026-09-01', 2, 60, 8)];
-  assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 60);
+test('best set is chosen by weight first: 100 x 3 beats 60 x 8', () => {
+  const entries = [set(1, '2026-09-01', 1, 60, 8), set(1, '2026-09-01', 2, 100, 3)];
+  assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 100);
   const sets = buildChartData(entries, bench, 'best').rows[0].detail[seriesKey(1)];
-  assert.equal(sets.find((s) => s.counts).reps, 8); // shown in the hover card
+  assert.equal(sets.find((s) => s.counts).reps, 3); // shown in the hover card
+});
+
+test('best set: at the same top weight, more reps wins', () => {
+  const entries = [set(1, '2026-09-01', 1, 100, 3), set(1, '2026-09-01', 2, 100, 5), set(1, '2026-09-01', 3, 90, 10)];
+  const sets = buildChartData(entries, bench, 'best').rows[0].detail[seriesKey(1)];
+  assert.deepEqual(sets.filter((s) => s.counts).map((s) => [s.weight, s.reps]), [[100, 5]]);
 });
 
 test('best mode charts one point per day using the best set', () => {
@@ -280,8 +286,8 @@ test('equalise applies set by set when a day mixes barbell and dumbbell', () => 
 });
 
 test('equalise changes which set is best', () => {
-  const entries = [bb(1, '2026-09-01', 1, 50, 10), db(1, '2026-09-01', 2, 30, 10)]; // 500 vs 300 (or 600 doubled)
-  // Off: the barbell set wins, so y = 50. On: the dumbbell set counts as 60 x 10 and wins, so y = 60.
+  const entries = [bb(1, '2026-09-01', 1, 50, 10), db(1, '2026-09-01', 2, 30, 10)]; // 50 vs 30 (or 60 doubled)
+  // Off: the barbell set is heavier, so y = 50. On: the dumbbell set counts as 60 and wins, so y = 60.
   assert.equal(dailySummaries(entries, bench, 'best').get(1).get('2026-09-01').value, 50);
   assert.equal(dailySummaries(entries, bench, 'best', { equalise: true }).get(1).get('2026-09-01').value, 60);
 });
@@ -314,9 +320,11 @@ test('equalise never changes cardio', () => {
 const pullups = { id: 'pull_ups', name: 'Pull ups', kind: 'reps' };
 const repsSet = (person_id, date, set_number, reps) => set(person_id, date, set_number, null, reps, 'pull_ups');
 
-test('reps only, total: sums the reps of the last 3 sets', () => {
+test('reps only, total: sums the reps of every set that day', () => {
   const entries = [1, 2, 3, 4].map((n, i) => repsSet(1, '2026-09-01', n, [20, 10, 8, 6][i]));
-  assert.equal(value(entries, pullups, 1, '2026-09-01', 'total'), 10 + 8 + 6);
+  assert.equal(value(entries, pullups, 1, '2026-09-01', 'total'), 20 + 10 + 8 + 6);
+  const sets = buildChartData(entries, pullups, 'total').rows[0].detail[seriesKey(1)];
+  assert.ok(sets.every((s) => s.counts)); // none faded in the hover card
 });
 
 test('reps only, best: the most reps in one set, from all sets', () => {
@@ -324,7 +332,7 @@ test('reps only, best: the most reps in one set, from all sets', () => {
   assert.equal(value(entries, pullups, 1, '2026-09-01', 'best'), 20);
 });
 
-test('reps only, % change works from total reps, and equalise does nothing', () => {
+test('reps only, % change works from the best set, and equalise does nothing', () => {
   const entries = [repsSet(1, '2026-09-01', 1, 10), repsSet(1, '2026-09-03', 1, 15)];
   const { rows } = buildChartData(entries, pullups, 'pct', { equalise: true });
   assert.deepEqual(rows.map((r) => r[seriesKey(1)]), [0, 50]);
@@ -338,13 +346,13 @@ test('amounts are labelled in reps for reps-only exercises', () => {
 
 test('best mode: one point per person per day, with that day\'s best reps kept for the hover card', () => {
   const entries = [
-    set(1, '2026-09-01', 1, 60, 8), set(1, '2026-09-01', 2, 70, 5), // 480 vs 350 -> 60x8
+    set(1, '2026-09-01', 1, 60, 8), set(1, '2026-09-01', 2, 70, 5), // 70 is heavier -> 70 x 5
     set(2, '2026-09-01', 1, 40, 12),
   ];
   const { rows } = buildChartData(entries, bench, 'best');
   const best = (key) => rows[0].detail[key].find((s) => s.counts);
-  assert.equal(rows[0][seriesKey(1)], 60);
-  assert.equal(best(seriesKey(1)).reps, 8);
+  assert.equal(rows[0][seriesKey(1)], 70);
+  assert.equal(best(seriesKey(1)).reps, 5);
   assert.equal(rows[0][seriesKey(2)], 40);
   assert.equal(best(seriesKey(2)).reps, 12);
 });
