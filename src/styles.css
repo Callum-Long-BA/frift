@@ -918,6 +918,21 @@ fieldset {
   color: var(--a1-muted);
 }
 
+.routine-suggest-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.routine-suggest-hide,
+.routine-suggest-show {
+  padding: 0;
+  font-size: 0.78rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .suggest-btn {
   display: flex;
   align-items: baseline;
@@ -1017,6 +1032,132 @@ fieldset {
 
 .routine-delete {
   margin-right: auto;
+}
+
+/* ---------- Simple phone view ---------- */
+
+.mobile {
+  display: grid;
+  gap: 14px;
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 14px 14px 32px;
+}
+
+.mobile-log {
+  display: grid;
+  gap: 18px;
+}
+
+.mobile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mobile-head .wordmark {
+  font-size: 2.8rem;
+}
+
+.mobile-step {
+  display: grid;
+  gap: 10px;
+}
+
+.mobile-step-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--display);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.step-no {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--plate);
+  color: #fff;
+  font-family: var(--text-font);
+  font-size: 0.95rem;
+}
+
+.mobile-select {
+  width: 100%;
+  padding: 0.75rem 0.8rem;
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius-control);
+  font-size: 1.05rem;
+}
+
+.mobile-routines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mobile-routines .chip {
+  padding: 0.5rem 0.9rem;
+  font-size: 1rem;
+}
+
+.chip-new {
+  border-style: dashed;
+}
+
+.mobile-exercises {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.mobile-exercise {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-panel);
+}
+
+.mobile-exercise.is-done {
+  border-color: var(--tag-text);
+}
+
+.mobile-exercise-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-exercise-name {
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.mobile-exercise-note {
+  margin-top: 2px;
+  font-size: 0.85rem;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-log-btn {
+  flex: none;
+  min-width: 4.5rem;
+  padding: 0.7rem 1rem;
+}
+
+/* The full board on a phone: a button back to the simple view. */
+.phone-switch {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* ---------- Passcode gate ---------- */
