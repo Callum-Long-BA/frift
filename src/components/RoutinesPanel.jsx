@@ -1,9 +1,12 @@
 import { useState } from 'react';
+import { dayLabel } from '../lib/metrics.js';
 
 // The right-hand section of the top tile. Lists your routines; picking one filters the page
 // to its exercises ("All exercises" clears it). You can start a new routine, edit the one
-// you are using, or copy someone else's to yourself.
-export default function RoutinesPanel({ me, people, routines, activeId, onPick, onNew, onEdit, onCopy }) {
+// you are using, or copy someone else's to yourself. Below them, up to two routines are
+// suggested from exercises you keep doing together (see lib/routines.js); tapping one opens
+// the new routine dialog already filled in.
+export default function RoutinesPanel({ me, people, routines, activeId, suggestions = [], onPick, onNew, onEdit, onCopy, onSuggest }) {
   const [copyError, setCopyError] = useState('');
   const [copying, setCopying] = useState(false);
 
@@ -65,6 +68,26 @@ export default function RoutinesPanel({ me, people, routines, activeId, onPick, 
           </button>
         )}
       </div>
+
+      {suggestions.length > 0 && (
+        <div className="routine-suggest">
+          <p className="routine-suggest-label">Suggested from your logs</p>
+          {suggestions.map((s) => (
+            <button
+              key={s.name}
+              type="button"
+              className="suggest-btn"
+              title={`${s.exerciseIds.length} exercises you did together on ${s.days} days, last on ${dayLabel(s.lastDate)}`}
+              onClick={() => onSuggest(s)}
+            >
+              <span aria-hidden="true">＋</span> {s.name}
+              <span className="suggest-meta">
+                {s.exerciseIds.length} exercises · {s.days} days
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {others.length > 0 && (
         <label className="routine-copy">

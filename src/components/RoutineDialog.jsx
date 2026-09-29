@@ -3,10 +3,11 @@ import { MUSCLE_GROUPS } from '../lib/constants.js';
 
 // Create or edit one of your routines: its name and which exercises it includes, grouped the
 // way the page is. An existing routine can also be copied to someone else, or deleted.
-export default function RoutineDialog({ person, people, exercises, routine, onClose, onSave, onDelete, onCopy }) {
+// `initial` ({ name, exerciseIds }) pre-fills a new routine, e.g. from a suggestion.
+export default function RoutineDialog({ person, people, exercises, routine, initial, onClose, onSave, onDelete, onCopy }) {
   const dialogRef = useRef(null);
-  const [name, setName] = useState(routine?.name ?? '');
-  const [picked, setPicked] = useState(() => new Set(routine?.exercise_ids ?? []));
+  const [name, setName] = useState(routine?.name ?? initial?.name ?? '');
+  const [picked, setPicked] = useState(() => new Set(routine?.exercise_ids ?? initial?.exerciseIds ?? []));
   const [copyTo, setCopyTo] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');

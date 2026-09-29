@@ -11,6 +11,7 @@ import RunningChart from './components/RunningChart.jsx';
 import CardioChart from './components/CardioChart.jsx';
 import RoutinesPanel from './components/RoutinesPanel.jsx';
 import RoutineDialog from './components/RoutineDialog.jsx';
+import { suggestRoutines } from './lib/routines.js';
 import AddEntryDialog from './components/AddEntryDialog.jsx';
 import AddExerciseDialog from './components/AddExerciseDialog.jsx';
 import ActivityStrip from './components/ActivityStrip.jsx';
@@ -43,7 +44,7 @@ export default function App() {
   const [routines, setRoutines] = useState([]);
   // The routine this browser is showing (only ever one of the chosen person's own).
   const [routineId, setRoutineId] = useState(() => Number(readStored(ROUTINE_KEY)) || null);
-  const [routineDialog, setRoutineDialog] = useState(null); // { routine: routine | null } while open
+  const [routineDialog, setRoutineDialog] = useState(null); // { routine, initial } while open
   const [dialogExerciseId, setDialogExerciseId] = useState(null);
   const [dialogRunType, setDialogRunType] = useState('easy');
   const [addingExercise, setAddingExercise] = useState(false);
@@ -149,6 +150,11 @@ export default function App() {
     const i = MUSCLE_GROUPS.findIndex((g) => g.key === e.muscle_group);
     return i === -1 ? MUSCLE_GROUPS.length : i;
   };
+  // Routines suggested from what the chosen person keeps doing on the same day.
+  const suggestions = me
+    ? suggestRoutines(entries, exercises, me.id, todayString(), routines.filter((r) => r.person_id === me.id))
+    : [];
+
   // A routine (one of the chosen person's own) narrows the page to its exercises.
   const activeRoutine = me ? routines.find((r) => r.id === routineId && r.person_id === me.id) ?? null : null;
   const inRoutine = (e) => !activeRoutine || activeRoutine.exercise_ids.includes(e.id);
@@ -295,6 +301,8 @@ export default function App() {
               onNew={() => setRoutineDialog({ routine: null })}
               onEdit={(routine) => setRoutineDialog({ routine })}
               onCopy={copyRoutine}
+              suggestions={suggestions}
+              onSuggest={(s) => setRoutineDialog({ routine: null, initial: { name: s.name, exerciseIds: s.exerciseIds } })}
             />
           </>
         )}
@@ -356,11 +364,12 @@ export default function App() {
 
       {routineDialog && me && (
         <RoutineDialog
-          key={routineDialog.routine?.id ?? 'new'}
+          key={routineDialog.routine?.id ?? `new-${routineDialog.initial?.name ?? ''}`}
           person={me}
           people={themedPeople}
           exercises={exercises}
           routine={routineDialog.routine}
+          initial={routineDialog.initial}
           onClose={() => setRoutineDialog(null)}
           onSave={saveRoutine}
           onDelete={deleteRoutine}
