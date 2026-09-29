@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, AuthError, clearPasscode, getPasscode } from './api.js';
-import { MAX_EXERCISES, MODES } from './lib/constants.js';
+import { MAX_EXERCISES, MODES, MUSCLE_GROUPS } from './lib/constants.js';
 import { readStored, writeStored } from './lib/storage.js';
 import { colourFor } from './lib/theme.js';
 import { todayString } from './lib/metrics.js';
@@ -8,6 +8,7 @@ import ControlPanel from './components/ControlPanel.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import ExerciseChart from './components/ExerciseChart.jsx';
 import RunningChart from './components/RunningChart.jsx';
+import CardioChart from './components/CardioChart.jsx';
 import AddEntryDialog from './components/AddEntryDialog.jsx';
 import AddExerciseDialog from './components/AddExerciseDialog.jsx';
 import ActivityStrip from './components/ActivityStrip.jsx';
@@ -18,6 +19,7 @@ import PasscodeGate from './components/PasscodeGate.jsx';
 const ME_KEY = 'frift.me';
 const MODE_KEY = 'frift.mode';
 const EQUALISE_KEY = 'frift.equalise';
+const MUSCLE_KEY = 'frift.muscle';
 
 export default function App() {
   const [unlocked, setUnlocked] = useState(() => Boolean(getPasscode()));
@@ -33,6 +35,8 @@ export default function App() {
     return MODES.includes(stored) ? stored : 'total';
   });
   const [equalise, setEqualise] = useState(() => readStored(EQUALISE_KEY) === '1');
+  // Weight training quick filter: 'all', a MUSCLE_GROUPS key, or 'other' (no group yet).
+  const [muscle, setMuscle] = useState(() => readStored(MUSCLE_KEY) || 'all');
   const [dialogExerciseId, setDialogExerciseId] = useState(null);
   const [dialogRunType, setDialogRunType] = useState('easy');
   const [addingExercise, setAddingExercise] = useState(false);
@@ -126,7 +130,27 @@ export default function App() {
 
   // Weighted exercises fill the left three columns; cardio and reps-only exercises
   // stack in the far right column. Each keeps its own sort order.
-  const weightExercises = exercises.filter((e) => e.kind === 'strength');
+  // Grouped by muscle, in the filter buttons' order (anything without a group last); within a
+  // group, the order they were added. Array.prototype.sort is stable, so that order is kept.
+  const groupRank = (e) => {
+    const i = MUSCLE_GROUPS.findIndex((g) => g.key === e.muscle_group);
+    return i === -1 ? MUSCLE_GROUPS.length : i;
+  };
+  const allWeightExercises = exercises.filter((e) => e.kind === 'strength').sort((a, b) => groupRank(a) - groupRank(b));
+  // Quick filter buttons: only groups that have exercises, plus Other if any lack a group.
+  const muscleFilters = [
+    { key: 'all', label: 'All' },
+    ...MUSCLE_GROUPS.filter((g) => allWeightExercises.some((e) => e.muscle_group === g.key)),
+    ...(allWeightExercises.some((e) => !e.muscle_group) ? [{ key: 'other', label: 'Other' }] : []),
+  ];
+  const activeMuscle = muscleFilters.some((f) => f.key === muscle) ? muscle : 'all';
+  const weightExercises = allWeightExercises.filter(
+    (e) => activeMuscle === 'all' || (activeMuscle === 'other' ? !e.muscle_group : e.muscle_group === activeMuscle),
+  );
+  function changeMuscle(next) {
+    setMuscle(next);
+    writeStored(MUSCLE_KEY, next);
+  }
   const ccExercises = exercises.filter((e) => e.kind !== 'strength');
 
   // Every chart in a section shares one date axis, starting at the first date anything in
@@ -151,7 +175,17 @@ export default function App() {
         </section>
       )}
     >
-      {exercise.kind === 'running' ? (
+      {exercise.kind === 'cardio' ? (
+        <CardioChart
+          exercise={exercise}
+          axisStart={axisStartFor(exercise)}
+          people={themedPeople}
+          entries={entries}
+          me={me}
+          loading={status === 'loading'}
+          onAdd={() => setDialogExerciseId(exercise.id)}
+        />
+      ) : exercise.kind === 'running' ? (
         <RunningChart
           exercise={exercise}
           axisStart={axisStartFor(exercise)}
@@ -213,9 +247,20 @@ export default function App() {
       </ControlPanel>
 
       <div className="zone zone-weights" role="region" aria-labelledby="zone-weights-title">
-        <h2 id="zone-weights-title" className="zone-title">
-          Weight training
-        </h2>
+        <div className="zone-head">
+          <h2 id="zone-weights-title" className="zone-title">
+            Weight training
+          </h2>
+          {allWeightExercises.length > 0 && (
+            <div className="segmented muscle-filter" role="group" aria-label="Show exercises for">
+              {muscleFilters.map((f) => (
+                <button key={f.key} type="button" aria-pressed={activeMuscle === f.key} onClick={() => changeMuscle(f.key)}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {status === 'loading' && exercises.length === 0 && (
           <section className="panel">

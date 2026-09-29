@@ -49,6 +49,23 @@ on conflict do nothing;
 -- Existing databases already have these rows, so switch the option on for them too.
 update exercises set equipment_choice = true where id in ('bench_press', 'squat', 'shoulder_press');
 
+-- Muscle group, for the quick filters above the Weight training charts. Weight exercises
+-- added in the app pick one; anything without one shows under "Other".
+alter table exercises add column if not exists muscle_group text
+  check (muscle_group in ('chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs'));
+update exercises set muscle_group = 'chest'
+  where muscle_group is null and id in ('bench_press', 'incline_dumbbell_press', 'machine_chest_press', 'chest_fly');
+update exercises set muscle_group = 'back'
+  where muscle_group is null and id in ('lat_pulldown', 'seated_row', 'deadlift');
+update exercises set muscle_group = 'shoulders'
+  where muscle_group is null and id in ('shoulder_press', 'machine_shoulder_press', 'lateral_raise', 'rear_delts');
+update exercises set muscle_group = 'biceps'
+  where muscle_group is null and id in ('incline_db_curl', 'cable_curl', 'hammer_curl');
+update exercises set muscle_group = 'triceps'
+  where muscle_group is null and id in ('tricep_pushdown', 'overhead_extension');
+update exercises set muscle_group = 'legs'
+  where muscle_group is null and id in ('squat', 'leg_extension', 'hamstring_curl', 'calf_raise');
+
 -- One row per set. Cardio is one row per day with only duration_min filled in.
 -- Reps-only exercises leave weight null. Assisted sets have a negative weight (the assistance).
 -- Running is one row per run (or per interval), with run_type, distance_km and duration_sec.
@@ -65,6 +82,8 @@ create table if not exists entries (
   run_type     text check (run_type in ('easy', 'tempo', 'intervals')),
   distance_km  numeric(6,2),
   duration_sec int,
+  speed_kmh    numeric(4,1),
+  incline_pct  numeric(4,1),
   created_at   timestamptz not null default now()
 );
 
@@ -72,6 +91,11 @@ create table if not exists entries (
 alter table entries add column if not exists run_type text check (run_type in ('easy', 'tempo', 'intervals'));
 alter table entries add column if not exists distance_km numeric(6,2);
 alter table entries add column if not exists duration_sec int;
+
+-- Cardio sessions record speed (km/h) and incline (%) as well as minutes. Older cardio
+-- entries have minutes only, so both may be empty.
+alter table entries add column if not exists speed_kmh numeric(4,1);
+alter table entries add column if not exists incline_pct numeric(4,1);
 
 -- What each kind of row must contain. Re-created on every run so older databases pick up
 -- reps-only sets (no weight) and running.
@@ -81,10 +105,10 @@ alter table entries add constraint entries_shape check (
      and run_type is null and distance_km is null and duration_sec is null)
   or
   (exercise = 'running' and run_type is not null and distance_km is not null and duration_sec is not null
-     and weight is null and reps is null and duration_min is null)
+     and weight is null and reps is null and duration_min is null and speed_kmh is null and incline_pct is null)
   or
   (exercise not in ('cardio', 'running') and reps is not null and duration_min is null
-     and run_type is null and distance_km is null and duration_sec is null)
+     and run_type is null and distance_km is null and duration_sec is null and speed_kmh is null and incline_pct is null)
 );
 
 -- Weight may be negative (assisted exercises: the assistance is logged as minus kg), so only
@@ -92,7 +116,7 @@ alter table entries add constraint entries_shape check (
 alter table entries drop constraint if exists entries_positive;
 alter table entries add constraint entries_positive check (
   coalesce(reps, 1) >= 1 and coalesce(duration_min, 1) > 0
-  and coalesce(distance_km, 1) > 0 and coalesce(duration_sec, 1) > 0
+  and coalesce(distance_km, 1) > 0 and coalesce(duration_sec, 1) > 0 and coalesce(speed_kmh, 1) > 0
 );
 
 -- Databases created before barbell/dumbbell support need the column added.

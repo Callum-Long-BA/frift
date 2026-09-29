@@ -14,6 +14,7 @@ import {
   chartRangeStart,
   splitAtGaps,
   evenTicks,
+  cardioChartData,
   bodyWeightOn,
   runningChartData,
   formatDuration,
@@ -600,4 +601,28 @@ test('evenTicks: the same evenly spaced dates for every chart sharing a range', 
   assert.equal(new Date(ticks[0]).toISOString().slice(0, 10), '2026-08-03');
   assert.equal(new Date(ticks[3]).toISOString().slice(0, 10), '2026-09-26');
   assert.deepEqual(evenTicks('2026-09-26', '2026-09-26', 4), [Date.parse('2026-09-26T00:00:00Z')]);
+});
+
+// ---------- cardio: speed, incline and time ----------
+
+const walk = (person_id, date, duration_min, speed_kmh, incline_pct) => ({
+  id: nextId++, person_id, exercise: 'cardio', date, set_number: 1, weight: null, reps: null, duration_min, speed_kmh, incline_pct,
+});
+
+test('cardioChartData: distance, time, speed, incline and climb from speed x time', () => {
+  const entries = [walk(1, '2026-09-28', 30, 6, 10), walk(1, '2026-09-28', 30, 8, 0), run(1, '2026-09-01', 20)];
+  const at = (view) => cardioChartData(entries, view).rows.find((r) => r.date === '2026-09-28')[seriesKey(1)];
+  assert.equal(at('distance'), 7); // 3 km + 4 km
+  assert.equal(at('time'), 60);
+  assert.equal(at('speed'), 7); // 7 km in an hour
+  assert.equal(at('incline'), 5); // half the time at 10%, half at 0%
+  assert.equal(at('climb'), 300); // 3 km at 10% = 300 m
+});
+
+test('cardioChartData: older minutes-only entries only count toward time', () => {
+  const entries = [run(1, '2026-09-01', 20), walk(1, '2026-09-28', 30, 6, 10)];
+  assert.deepEqual(cardioChartData(entries, 'time').rows.map((r) => r.date), ['2026-09-01', '2026-09-28']);
+  assert.deepEqual(cardioChartData(entries, 'distance').rows.map((r) => r.date), ['2026-09-28']);
+  const [detail] = cardioChartData(entries, 'time').rows[1].detail[seriesKey(1)];
+  assert.deepEqual(detail, { minutes: 30, speed: 6, incline: 10 });
 });

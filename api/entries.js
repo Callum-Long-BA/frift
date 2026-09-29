@@ -29,7 +29,9 @@ export default route({
              equipment,
              run_type,
              distance_km::float8 as distance_km,
-             duration_sec
+             duration_sec,
+             speed_kmh::float8 as speed_kmh,
+             incline_pct::float8 as incline_pct
       from entries
       order by entry_date, set_number, id`;
   },
@@ -38,7 +40,7 @@ export default route({
   //   Reps-only exercises send sets: [{ reps }] and store a null weight.
   //   Set numbers continue from whatever that person already logged that day.
   //   equipment ('barbell' | 'dumbbell') is required for exercises that offer the choice.
-  // Cardio:   { personId, exercise: 'cardio', date, durationMin }
+  // Cardio:   { personId, exercise: 'cardio', date, durationMin, speedKmh, inclinePct }
   // Running:  { personId, exercise: 'running', date, runType, runs: [{ distanceKm, seconds }] }
   //   One run for easy and tempo, one per interval for intervals. Numbered like sets.
   async POST(req) {
@@ -48,12 +50,14 @@ export default route({
     try {
       if (entry.kind === 'cardio') {
         return await sql`
-          insert into entries (person_id, exercise, entry_date, set_number, duration_min)
-          values (${entry.personId}::int, ${entry.exercise}::text, ${entry.date}::date, 1, ${entry.durationMin}::numeric)
+          insert into entries (person_id, exercise, entry_date, set_number, duration_min, speed_kmh, incline_pct)
+          values (${entry.personId}::int, ${entry.exercise}::text, ${entry.date}::date, 1, ${entry.durationMin}::numeric,
+                  ${entry.speedKmh}::numeric, ${entry.inclinePct}::numeric)
           returning id, person_id, exercise,
                     to_char(entry_date, 'YYYY-MM-DD') as date,
                     set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment,
-                    run_type, distance_km::float8 as distance_km, duration_sec`;
+                    run_type, distance_km::float8 as distance_km, duration_sec,
+                    speed_kmh::float8 as speed_kmh, incline_pct::float8 as incline_pct`;
       }
 
       if (entry.kind === 'running') {
@@ -76,7 +80,8 @@ export default route({
           returning id, person_id, exercise,
                     to_char(entry_date, 'YYYY-MM-DD') as date,
                     set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment,
-                    run_type, distance_km::float8 as distance_km, duration_sec`;
+                    run_type, distance_km::float8 as distance_km, duration_sec,
+                    speed_kmh::float8 as speed_kmh, incline_pct::float8 as incline_pct`;
       }
 
       const numbers = entry.sets.map((_, i) => i + 1);
@@ -100,7 +105,8 @@ export default route({
         returning id, person_id, exercise,
                   to_char(entry_date, 'YYYY-MM-DD') as date,
                   set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment,
-                    run_type, distance_km::float8 as distance_km, duration_sec`;
+                    run_type, distance_km::float8 as distance_km, duration_sec,
+                    speed_kmh::float8 as speed_kmh, incline_pct::float8 as incline_pct`;
     } catch (err) {
       throw translateDbError(err, entry);
     }

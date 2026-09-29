@@ -103,11 +103,16 @@ test('parseNewEntry rejects blanks, fractions, negatives and bad shapes', () => 
   for (const body of bad) assert.throws(() => parseNewEntry(body, exercises, now), HttpError);
 });
 
-test('parseNewEntry handles cardio minutes', () => {
-  const e = parseNewEntry({ personId: 2, exercise: 'cardio', date: '2026-09-19', durationMin: '30' }, exercises, now);
-  assert.deepEqual(e, { kind: 'cardio', personId: 2, exercise: 'cardio', date: '2026-09-19', durationMin: 30 });
+test('parseNewEntry handles cardio speed, incline and minutes', () => {
+  const cardio = { personId: 2, exercise: 'cardio', date: '2026-09-19', speedKmh: '6.54', inclinePct: '8' };
+  const e = parseNewEntry({ ...cardio, durationMin: '30' }, exercises, now);
+  assert.deepEqual(e, { kind: 'cardio', personId: 2, exercise: 'cardio', date: '2026-09-19', durationMin: 30, speedKmh: 6.5, inclinePct: 8 });
+  assert.equal(parseNewEntry({ ...cardio, durationMin: 30, inclinePct: 0 }, exercises, now).inclinePct, 0); // flat is fine
+  for (const bad of [{ speedKmh: '' }, { speedKmh: 0 }, { speedKmh: 41 }, { inclinePct: '' }, { inclinePct: -11 }, { inclinePct: 41 }]) {
+    assert.throws(() => parseNewEntry({ ...cardio, durationMin: 30, ...bad }, exercises, now), HttpError);
+  }
   for (const durationMin of ['', 0, -3, 601, 'abc']) {
-    assert.throws(() => parseNewEntry({ personId: 2, exercise: 'cardio', date: '2026-09-19', durationMin }, exercises, now), HttpError);
+    assert.throws(() => parseNewEntry({ ...cardio, durationMin }, exercises, now), HttpError);
   }
 });
 
@@ -154,7 +159,7 @@ test('exercises without the choice ignore any equipment sent and store none', ()
 });
 
 test('cardio never carries equipment', () => {
-  const e = parseNewEntry({ personId: 1, exercise: 'cardio', date: '2026-09-19', durationMin: 20, equipment: 'dumbbell' }, exercises, now);
+  const e = parseNewEntry({ personId: 1, exercise: 'cardio', date: '2026-09-19', durationMin: 20, speedKmh: 6, inclinePct: 5, equipment: 'dumbbell' }, exercises, now);
   assert.equal(e.equipment, undefined);
 });
 

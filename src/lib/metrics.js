@@ -468,3 +468,56 @@ export function runningChartData(entries, runType, { tempoDistance = '5k' } = {}
   });
   return { rows, personIds: [...perPerson.keys()] };
 }
+
+// ---------- Cardio ----------
+
+// Km covered in one cardio session (speed x time), or null for older minutes-only entries.
+export const cardioKm = (e) => (e.speed_kmh ? (e.speed_kmh * e.duration_min) / 60 : null);
+
+// Chart rows for the Cardio tile, in the same shape as buildChartData, for one view (see
+// CARDIO_VIEWS). Per person per day:
+//   distance: km (speed x time)          time:    minutes
+//   speed:    km / hours (average)       incline: time-weighted average incline, %
+//   climb:    metres gained (km x 1000 x incline %)
+// Older entries with minutes only count toward 'time' and are left out of the others.
+// detail[p<id>] lists the day's sessions: [{ minutes, speed, incline }].
+export function cardioChartData(entries, view = 'distance') {
+  const groups = new Map();
+  for (const e of entries) {
+    if (e.exercise !== 'cardio') continue;
+    if (view !== 'time' && !e.speed_kmh) continue;
+    const key = `${e.person_id}|${e.date}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  }
+
+  const perPerson = new Map();
+  const allDates = new Set();
+  for (const [key, sessions] of groups) {
+    const [personId, date] = key.split('|');
+    const minutes = sessions.reduce((sum, e) => sum + e.duration_min, 0);
+    const km = sessions.reduce((sum, e) => sum + (cardioKm(e) ?? 0), 0);
+    let value;
+    if (view === 'time') value = round1(minutes);
+    else if (view === 'distance') value = Math.round(km * 100) / 100;
+    else if (view === 'speed') value = round1((km / minutes) * 60);
+    else if (view === 'incline') value = round1(sessions.reduce((sum, e) => sum + (e.incline_pct ?? 0) * e.duration_min, 0) / minutes);
+    else value = Math.round(sessions.reduce((sum, e) => sum + (cardioKm(e) ?? 0) * 10 * (e.incline_pct ?? 0), 0));
+    const detail = sessions.map((e) => ({ minutes: e.duration_min, speed: e.speed_kmh ?? null, incline: e.incline_pct ?? null }));
+    const id = Number(personId);
+    if (!perPerson.has(id)) perPerson.set(id, new Map());
+    perPerson.get(id).set(date, { value, detail });
+    allDates.add(date);
+  }
+
+  const rows = [...allDates].sort().map((date) => {
+    const row = { t: toTimestamp(date), date, detail: {} };
+    for (const [personId, byDate] of perPerson) {
+      const point = byDate.get(date);
+      row[seriesKey(personId)] = point ? point.value : null;
+      if (point) row.detail[seriesKey(personId)] = point.detail;
+    }
+    return row;
+  });
+  return { rows, personIds: [...perPerson.keys()] };
+}

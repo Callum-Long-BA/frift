@@ -158,3 +158,12 @@ test("reps-only PRs are the day's total reps, beating every earlier day's total"
   const fewer = rows.slice(0, 4); // 10 today: not a PR, so the one-line format
   assert.equal(buildDailyMessages({ people, exercises, entries: fewer, date: today })[0].payload.content, 'Sam worked out today ✅ -> Pull ups.');
 });
+
+test('cardio shows speed and incline when they were logged', () => {
+  const rows = [row(1, today, 'cardio', 1, { duration_min: 30, speed_kmh: 6.5, incline_pct: 8 })];
+  const [sam] = buildDailyMessages({ people, exercises, entries: rows, date: today });
+  assert.equal(sam.payload.content, 'Sam worked out today ✅ -> Cardio.');
+  const withPr = [row(1, '2026-09-15', 'cardio', 1, { duration_min: 20 }), ...rows];
+  const [pr] = buildDailyMessages({ people, exercises, entries: withPr, date: today });
+  assert.equal(pr.payload.content, 'Sam worked out today ✅ ->\n* Cardio [PR! 🏆 30 min at 6.5km/h, 8% incline]');
+});

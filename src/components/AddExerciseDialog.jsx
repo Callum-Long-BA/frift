@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { MAX_EXERCISES, MAX_EXERCISE_NAME } from '../lib/constants.js';
+import { MAX_EXERCISES, MAX_EXERCISE_NAME, MUSCLE_GROUPS } from '../lib/constants.js';
 
 export default function AddExerciseDialog({ person, exercises, onClose, onCreated }) {
   const dialogRef = useRef(null);
   const [name, setName] = useState('');
   const [kind, setKind] = useState('strength');
+  const [muscleGroup, setMuscleGroup] = useState('');
   const [equipmentChoice, setEquipmentChoice] = useState(false);
   const repsOnly = kind === 'reps';
   const [busy, setBusy] = useState(false);
@@ -29,10 +30,14 @@ export default function AddExerciseDialog({ person, exercises, onClose, onCreate
       setError('That exercise already exists.');
       return;
     }
+    if (!repsOnly && !muscleGroup) {
+      setError('Choose a muscle group.');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
-      const created = await api.addExercise(clean, person.id, kind, !repsOnly && equipmentChoice);
+      const created = await api.addExercise(clean, person.id, kind, !repsOnly && equipmentChoice, repsOnly ? null : muscleGroup);
       onCreated(created);
       closeDialog();
     } catch (err) {
@@ -95,6 +100,21 @@ export default function AddExerciseDialog({ person, exercises, onClose, onCreate
           </label>
           {repsOnly && <p className="hint">For bodyweight moves like pull-ups or push-ups. No weight is entered.</p>}
         </fieldset>
+
+        {!repsOnly && (
+          <label className="field">
+            Muscle group
+            <select value={muscleGroup} disabled={busy} onChange={(e) => setMuscleGroup(e.target.value)} required>
+              <option value="">Choose…</option>
+              {MUSCLE_GROUPS.map((g) => (
+                <option key={g.key} value={g.key}>
+                  {g.label}
+                </option>
+              ))}
+            </select>
+            <span className="hint">Used by the quick filters above the Weight training charts.</span>
+          </label>
+        )}
 
         {!repsOnly && (
           <label className="check-field">

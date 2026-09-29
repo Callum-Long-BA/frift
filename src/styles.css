@@ -147,6 +147,19 @@ fieldset {
   color: var(--text-2);
 }
 
+/* The Weight training heading, with the muscle group quick filters beside it. */
+.zone-head {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+}
+
+.muscle-filter button {
+  padding: 0.25rem 0.75rem;
+}
+
 /* The top tile runs the full width of the board. */
 .board > .control {
   grid-column: 1 / -1;
@@ -1115,6 +1128,34 @@ fieldset {
   background: var(--plate);
   border-color: var(--plate);
   color: #fff;
+}
+
+/* Cardio: speed, incline and time side by side. */
+.cardio-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 10px;
+  padding: 0;
+  border: 0;
+}
+
+.cardio-fields legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-weight: 500;
+}
+
+.cardio-fields .hint {
+  grid-column: 1 / -1;
+}
+
+.sheet select {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius-control);
+  color: var(--text);
 }
 
 .set-row.reps-only {
