@@ -163,3 +163,34 @@ export function parseBodyWeight(body, now = new Date()) {
   }
   return { personId, date, weightKg: Math.round(weightKg * 10) / 10 };
 }
+
+export const MAX_ROUTINE_NAME = 30;
+export const MAX_ROUTINES_PER_PERSON = 10;
+
+// { name, exerciseIds } for a routine. The name is trimmed like an exercise name; exercise
+// ids must all exist (`exerciseIds` is the set of ids in the database), duplicates dropped.
+export function parseRoutine(body, exerciseIds) {
+  const name = String(body?.name ?? '').trim().replace(/\s+/g, ' ');
+  if (name.length < 1 || name.length > MAX_ROUTINE_NAME) {
+    throw new HttpError(400, `Routine name must be 1 to ${MAX_ROUTINE_NAME} characters.`);
+  }
+  const ids = body?.exerciseIds;
+  if (!Array.isArray(ids) || ids.length === 0) throw new HttpError(400, 'Pick at least one exercise for the routine.');
+  const unique = [...new Set(ids.map(String))];
+  const unknown = unique.filter((id) => !exerciseIds.has(id));
+  if (unknown.length > 0) throw new HttpError(400, 'That routine includes an exercise that no longer exists. Refresh and try again.');
+  return { name, exerciseIds: unique };
+}
+
+// The name for a copy of a routine: the same name if the new owner has no routine called that,
+// otherwise "Push Day (from Bill)", then "Push Day (from Bill) 2" and so on.
+export function copyName(name, fromName, takenNames) {
+  const taken = new Set(takenNames.map((n) => n.toLowerCase()));
+  if (!taken.has(name.toLowerCase())) return name;
+  const base = `${name} (from ${fromName})`.slice(0, MAX_ROUTINE_NAME).trim();
+  if (!taken.has(base.toLowerCase())) return base;
+  for (let n = 2; ; n++) {
+    const next = `${base.slice(0, MAX_ROUTINE_NAME - String(n).length - 1)} ${n}`;
+    if (!taken.has(next.toLowerCase())) return next;
+  }
+}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { COUNTED_SETS, MAX_SETS_PER_ENTRY, MAX_WEIGHT, MIN_WEIGHT, RUN_TYPES, RUN_TYPE_LABELS } from '../lib/constants.js';
-import { nextSetNumber, todayString } from '../lib/metrics.js';
+import { dayLabel, lastSession, nextSetNumber, todayString } from '../lib/metrics.js';
 import { runText } from './RunningChart.jsx';
 import { cardioText } from './CardioChart.jsx';
 
@@ -47,6 +47,21 @@ export default function AddEntryDialog({ exercise, person, entries, runType: ini
     [entries, person.id, exercise.id, date],
   );
   const firstNewSet = nextSetNumber(entries, person.id, exercise.id, date);
+
+  // What this person did last time (before the chosen date), so they know what to beat. Each
+  // set row shows the same-numbered set from then, and its boxes use those numbers as hints.
+  const last = useMemo(
+    () => lastSession(entries, person.id, exercise.id, date, isRunning ? runType : null),
+    [entries, person.id, exercise.id, date, isRunning, runType],
+  );
+  const lastSet = (n) => last?.rows.find((r) => r.set_number === n) ?? null;
+  const setText = (r) => (r.weight === null ? `${r.reps} reps` : `${r.weight} kg × ${r.reps}${r.equipment === 'dumbbell' ? ' DB' : ''}`);
+  let lastSummary = null;
+  if (last) {
+    if (isCardio) lastSummary = last.rows.map((r) => cardioText(r.duration_min, r.speed_kmh, r.incline_pct)).join('; ');
+    else if (isRunning) lastSummary = last.rows.map((r) => runText({ distanceKm: r.distance_km, seconds: r.duration_sec })).join(', ');
+    else lastSummary = last.rows.map(setText).join(', ');
+  }
   // Weights: only the last few sets count toward Total. Reps-only: every set counts.
   const countedIds = new Set((repsOnly ? logged : logged.slice(-COUNTED_SETS)).map((r) => r.id));
   const cardioDone = isCardio && logged.length > 0;
@@ -207,6 +222,13 @@ export default function AddEntryDialog({ exercise, person, entries, runType: ini
           />
         </label>
 
+        {lastSummary && (
+          <p className="last-time">
+            <span className="last-time-label">Last time · {dayLabel(last.date)}</span>
+            {lastSummary}
+          </p>
+        )}
+
         {hasEquipment && (
           <fieldset className="equipment" disabled={busy}>
             <legend>Equipment</legend>
@@ -352,9 +374,13 @@ export default function AddEntryDialog({ exercise, person, entries, runType: ini
             <legend>Sets to add</legend>
             {sets.map((s, i) => {
               const n = firstNewSet + i;
+              const before = lastSet(n);
               return (
                 <div className={repsOnly ? 'set-row reps-only' : 'set-row'} key={i}>
-                  <span className="set-label">Set {n}</span>
+                  <span className="set-label">
+                    Set {n}
+                    {before && <small className="last-hint">last {before.weight === null ? before.reps : `${before.weight}×${before.reps}`}</small>}
+                  </span>
                   {!repsOnly && (
                     <>
                       <input
@@ -363,7 +389,7 @@ export default function AddEntryDialog({ exercise, person, entries, runType: ini
                         min={MIN_WEIGHT}
                         max={MAX_WEIGHT}
                         step="0.5"
-                        placeholder={isDumbbell ? 'kg each' : 'kg'}
+                        placeholder={before ? String(before.weight) : isDumbbell ? 'kg each' : 'kg'}
                         aria-label={`Set ${n} weight in kilograms${isDumbbell ? ', per dumbbell' : ''}`}
                         value={s.weight}
                         onChange={(e) => updateSet(i, { weight: e.target.value })}
@@ -379,7 +405,7 @@ export default function AddEntryDialog({ exercise, person, entries, runType: ini
                     min="1"
                     max="200"
                     step="1"
-                    placeholder="reps"
+                    placeholder={before ? String(before.reps) : 'reps'}
                     aria-label={`Set ${n} reps`}
                     value={s.reps}
                     onChange={(e) => updateSet(i, { reps: e.target.value })}

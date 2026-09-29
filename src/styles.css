@@ -240,7 +240,7 @@ fieldset {
    Each section has a fixed column, so nothing shifts while the data is still loading. */
 .control {
   display: grid;
-  grid-template-columns: minmax(13rem, 16rem) minmax(0, 1.5fr) minmax(0, 1.7fr);
+  grid-template-columns: minmax(13rem, 16rem) minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(12rem, 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: 16px 20px;
   padding: 18px;
@@ -274,6 +274,10 @@ fieldset {
   grid-column: 3;
 }
 
+.control .routines {
+  grid-column: 4;
+}
+
 /* Sections after the first sit behind a divider. Content shrinks rather than scrolls. */
 .control-section {
   display: flex;
@@ -298,22 +302,28 @@ fieldset {
   color: var(--a1-muted);
 }
 
-/* On narrower screens the three sections cannot share one fixed-height row, so the top
-   tile alone grows: controls and activity side by side with the log below on a tablet,
-   one above another on a phone. */
+/* On narrower screens the four sections cannot share one fixed-height row, so the top
+   tile alone grows: 2 x 2 on a tablet (log and routines underneath), one above another on
+   a phone. */
 @media (max-width: 1180px) {
   .control {
     height: auto;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
     grid-template-rows: auto auto;
   }
-  .control .log {
-    grid-column: 1 / -1;
+  .control .log,
+  .control .routines {
     grid-row: 2;
     padding-top: 16px;
-    padding-left: 0;
     border-top: 1px solid var(--a1-border);
+  }
+  .control .log {
+    grid-column: 1;
+    padding-left: 0;
     border-left: 0;
+  }
+  .control .routines {
+    grid-column: 2;
   }
 }
 
@@ -874,6 +884,97 @@ fieldset {
   opacity: 0.7;
 }
 
+/* ---------- Routines ---------- */
+
+.routine-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.routine-list .chip {
+  border-color: var(--a1-field-line);
+  color: var(--a1-text);
+  font-size: 0.85rem;
+}
+
+.routine-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+}
+
+.routine-copy {
+  display: grid;
+  gap: 4px;
+  margin-top: auto;
+  font-size: 0.82rem;
+  color: var(--a1-muted);
+}
+
+.routine-copy .dark-select {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+/* The routine dialog's exercise checklist, grouped like the page. */
+.routine-pick {
+  display: grid;
+  gap: 10px;
+  max-height: 45vh;
+  overflow-y: auto;
+  padding: 0;
+  border: 0;
+}
+
+.routine-pick legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-weight: 500;
+}
+
+.routine-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 2px 12px;
+}
+
+.routine-group-name {
+  grid-column: 1 / -1;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.routine-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.routine-item input {
+  accent-color: var(--plate);
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.routine-copy-to {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.routine-copy-to .field {
+  flex: 1;
+}
+
+.routine-delete {
+  margin-right: auto;
+}
+
 /* ---------- Passcode gate ---------- */
 
 .gate {
@@ -1160,6 +1261,33 @@ fieldset {
 
 .set-row.reps-only {
   grid-template-columns: 4.2rem minmax(0, 1fr) auto;
+}
+
+/* What you did last time, above the sets, and per set under "Set 1". */
+.last-time {
+  padding: 8px 10px;
+  background: var(--raised);
+  border-radius: var(--radius-control);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.last-time-label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.last-hint {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-2);
+  white-space: nowrap;
 }
 
 .set-label {

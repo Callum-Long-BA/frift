@@ -9,6 +9,8 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 import ExerciseChart from './components/ExerciseChart.jsx';
 import RunningChart from './components/RunningChart.jsx';
 import CardioChart from './components/CardioChart.jsx';
+import RoutinesPanel from './components/RoutinesPanel.jsx';
+import RoutineDialog from './components/RoutineDialog.jsx';
 import AddEntryDialog from './components/AddEntryDialog.jsx';
 import AddExerciseDialog from './components/AddExerciseDialog.jsx';
 import ActivityStrip from './components/ActivityStrip.jsx';
@@ -20,6 +22,7 @@ const ME_KEY = 'frift.me';
 const MODE_KEY = 'frift.mode';
 const EQUALISE_KEY = 'frift.equalise';
 const MUSCLE_KEY = 'frift.muscle';
+const ROUTINE_KEY = 'frift.routine';
 
 export default function App() {
   const [unlocked, setUnlocked] = useState(() => Boolean(getPasscode()));
@@ -37,6 +40,10 @@ export default function App() {
   const [equalise, setEqualise] = useState(() => readStored(EQUALISE_KEY) === '1');
   // Weight training quick filter: 'all', a MUSCLE_GROUPS key, or 'other' (no group yet).
   const [muscle, setMuscle] = useState(() => readStored(MUSCLE_KEY) || 'all');
+  const [routines, setRoutines] = useState([]);
+  // The routine this browser is showing (only ever one of the chosen person's own).
+  const [routineId, setRoutineId] = useState(() => Number(readStored(ROUTINE_KEY)) || null);
+  const [routineDialog, setRoutineDialog] = useState(null); // { routine: routine | null } while open
   const [dialogExerciseId, setDialogExerciseId] = useState(null);
   const [dialogRunType, setDialogRunType] = useState('easy');
   const [addingExercise, setAddingExercise] = useState(false);
@@ -48,7 +55,7 @@ export default function App() {
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setStatus('loading');
     try {
-      const [nextPeople, nextExercises, nextEntries, nextBodyWeights] = await Promise.all([
+      const [nextPeople, nextExercises, nextEntries, nextBodyWeights, nextRoutines] = await Promise.all([
         api.people(),
         api.exercises(),
         api.entries(),
@@ -57,11 +64,17 @@ export default function App() {
           if (err instanceof AuthError) throw err;
           return [];
         }),
+        // Routines only filter the page, so a failure here should not stop it either.
+        api.routines().catch((err) => {
+          if (err instanceof AuthError) throw err;
+          return [];
+        }),
       ]);
       setPeople(nextPeople);
       setExercises(nextExercises);
       setEntries(nextEntries);
       setBodyWeights(nextBodyWeights);
+      setRoutines(nextRoutines);
       setError('');
       setStatus('ready');
     } catch (err) {
@@ -136,7 +149,12 @@ export default function App() {
     const i = MUSCLE_GROUPS.findIndex((g) => g.key === e.muscle_group);
     return i === -1 ? MUSCLE_GROUPS.length : i;
   };
-  const allWeightExercises = exercises.filter((e) => e.kind === 'strength').sort((a, b) => groupRank(a) - groupRank(b));
+  // A routine (one of the chosen person's own) narrows the page to its exercises.
+  const activeRoutine = me ? routines.find((r) => r.id === routineId && r.person_id === me.id) ?? null : null;
+  const inRoutine = (e) => !activeRoutine || activeRoutine.exercise_ids.includes(e.id);
+  const allWeightExercises = exercises
+    .filter((e) => e.kind === 'strength' && inRoutine(e))
+    .sort((a, b) => groupRank(a) - groupRank(b));
   // Quick filter buttons: only groups that have exercises, plus Other if any lack a group.
   const muscleFilters = [
     { key: 'all', label: 'All' },
@@ -151,7 +169,33 @@ export default function App() {
     setMuscle(next);
     writeStored(MUSCLE_KEY, next);
   }
-  const ccExercises = exercises.filter((e) => e.kind !== 'strength');
+  const ccExercises = exercises.filter((e) => e.kind !== 'strength' && inRoutine(e));
+
+  function pickRoutine(id) {
+    setRoutineId(id);
+    writeStored(ROUTINE_KEY, id ? String(id) : '');
+  }
+
+  // Create (routine null) or update one of the chosen person's routines, then show it.
+  async function saveRoutine(routine, name, exerciseIds) {
+    const saved = routine
+      ? await api.updateRoutine(routine.id, me.id, name, exerciseIds)
+      : await api.addRoutine(me.id, name, exerciseIds);
+    setRoutines((prev) => [...prev.filter((r) => r.id !== saved.id), saved]);
+    pickRoutine(saved.id);
+  }
+
+  async function deleteRoutine(routine) {
+    await api.deleteRoutine(routine.id, me.id);
+    setRoutines((prev) => prev.filter((r) => r.id !== routine.id));
+    if (routineId === routine.id) pickRoutine(null);
+  }
+
+  async function copyRoutine(id, toPersonId) {
+    const copy = await api.copyRoutine(id, toPersonId);
+    setRoutines((prev) => [...prev, copy]);
+    return copy;
+  }
 
   // Every chart in a section shares one date axis, starting at the first date anything in
   // that section was logged (see LinesChart).
@@ -242,6 +286,16 @@ export default function App() {
           <>
             <ActivityStrip people={themedPeople} entries={entries} exercises={exercises} me={me} />
             <ActivityLog people={themedPeople} entries={entries} exercises={exercises} />
+            <RoutinesPanel
+              me={me}
+              people={themedPeople}
+              routines={routines}
+              activeId={activeRoutine?.id ?? null}
+              onPick={pickRoutine}
+              onNew={() => setRoutineDialog({ routine: null })}
+              onEdit={(routine) => setRoutineDialog({ routine })}
+              onCopy={copyRoutine}
+            />
           </>
         )}
       </ControlPanel>
@@ -297,6 +351,20 @@ export default function App() {
           onClose={() => setDialogExerciseId(null)}
           onSaved={(rows) => setEntries((prev) => [...prev, ...rows])}
           onDeleted={(id) => setEntries((prev) => prev.filter((e) => e.id !== id))}
+        />
+      )}
+
+      {routineDialog && me && (
+        <RoutineDialog
+          key={routineDialog.routine?.id ?? 'new'}
+          person={me}
+          people={themedPeople}
+          exercises={exercises}
+          routine={routineDialog.routine}
+          onClose={() => setRoutineDialog(null)}
+          onSave={saveRoutine}
+          onDelete={deleteRoutine}
+          onCopy={copyRoutine}
         />
       )}
 
