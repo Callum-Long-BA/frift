@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { COUNTED_SETS, MAX_SETS_PER_ENTRY, MAX_WEIGHT, MIN_WEIGHT, RUN_TYPES, RUN_TYPE_LABELS } from '../lib/constants.js';
 import { nextSetNumber, todayString } from '../lib/metrics.js';
 import { runText } from './RunningChart.jsx';
+import { cardioText } from './CardioChart.jsx';
 
 const EMPTY_RUN = { km: '', min: '', sec: '' };
 
@@ -12,6 +13,8 @@ export default function AddEntryDialog({ exercise, person, entries, runType: ini
   const [date, setDate] = useState(() => todayString());
   const [sets, setSets] = useState([{ weight: '', reps: '' }]);
   const [minutes, setMinutes] = useState('');
+  const [speed, setSpeed] = useState('');
+  const [incline, setIncline] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const isCardio = exercise.kind === 'cardio';
@@ -79,12 +82,22 @@ export default function AddEntryDialog({ exercise, person, entries, runType: ini
 
     let payload;
     if (isCardio) {
+      const speedKmh = Number(speed);
+      const inclinePct = Number(incline);
       const durationMin = Number(minutes);
-      if (minutes === '' || !(durationMin > 0)) {
-        setError('Enter the duration in minutes.');
+      if (speed === '' || !(speedKmh > 0 && speedKmh <= 40)) {
+        setError('Enter the speed in km/h.');
         return;
       }
-      payload = { personId: person.id, exercise: exercise.id, date, durationMin };
+      if (incline === '' || !(inclinePct >= -10 && inclinePct <= 40)) {
+        setError('Enter the incline in % (0 if flat).');
+        return;
+      }
+      if (minutes === '' || !(durationMin > 0)) {
+        setError('Enter the time in minutes.');
+        return;
+      }
+      payload = { personId: person.id, exercise: exercise.id, date, durationMin, speedKmh, inclinePct };
     } else if (isRunning) {
       const parsed = [];
       for (let i = 0; i < runs.length; i++) {
@@ -314,22 +327,26 @@ export default function AddEntryDialog({ exercise, person, entries, runType: ini
         )}
 
         {isRunning ? null : isCardio ? (
-          <div className="field">
-            <label htmlFor="minutes">Duration in minutes</label>
-            <input
-              id="minutes"
-              type="number"
-              inputMode="decimal"
-              min="1"
-              max="600"
-              step="1"
-              placeholder="30"
-              value={minutes}
-              disabled={cardioDone || busy}
-              onChange={(e) => setMinutes(e.target.value)}
-            />
-            {cardioDone && <p className="hint">Cardio is already logged for this date. Delete it below to change it.</p>}
-          </div>
+          <fieldset className="cardio-fields" disabled={cardioDone || busy}>
+            <legend>Session</legend>
+            <label className="field">
+              Speed (km/h)
+              <input type="number" inputMode="decimal" min="0.1" max="40" step="0.1" placeholder="6.5" value={speed} onChange={(e) => setSpeed(e.target.value)} />
+            </label>
+            <label className="field">
+              Incline (%)
+              <input type="number" inputMode="decimal" min="-10" max="40" step="0.5" placeholder="8" value={incline} onChange={(e) => setIncline(e.target.value)} />
+            </label>
+            <label className="field">
+              Time (minutes)
+              <input type="number" inputMode="decimal" min="1" max="600" step="1" placeholder="30" value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+            </label>
+            {cardioDone ? (
+              <p className="hint">Cardio is already logged for this date. Delete it below to change it.</p>
+            ) : (
+              <p className="hint">Distance and height climbed are worked out from these.</p>
+            )}
+          </fieldset>
         ) : (
           <fieldset className="sets" disabled={busy}>
             <legend>Sets to add</legend>
@@ -397,7 +414,7 @@ export default function AddEntryDialog({ exercise, person, entries, runType: ini
                 <li key={row.id}>
                   <span>
                     {isCardio
-                      ? `${row.duration_min} min`
+                      ? cardioText(row.duration_min, row.speed_kmh, row.incline_pct)
                       : isRunning
                         ? `${RUN_TYPE_LABELS[row.run_type]}: ${runText({ distanceKm: row.distance_km, seconds: row.duration_sec })}`
                         : row.weight === null

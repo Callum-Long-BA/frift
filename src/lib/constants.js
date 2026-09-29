@@ -18,6 +18,26 @@ export const EQUIPMENT = ['barbell', 'dumbbell'];
 // 'cardio' also exists, but only the built-in Cardio exercise uses it.
 export const ADDABLE_KINDS = ['strength', 'reps'];
 
+// Muscle groups for the Weight training quick filters, in the order the buttons appear.
+// Weight exercises pick one when they are added; any without one show under "Other".
+export const MUSCLE_GROUPS = [
+  { key: 'chest', label: 'Chest' },
+  { key: 'back', label: 'Back' },
+  { key: 'shoulders', label: 'Shoulders' },
+  { key: 'biceps', label: 'Biceps' },
+  { key: 'triceps', label: 'Triceps' },
+  { key: 'legs', label: 'Legs' },
+];
+
+// What the Cardio tile can chart, from each session's speed, incline and minutes.
+export const CARDIO_VIEWS = [
+  { key: 'distance', label: 'Distance', subtitle: 'Distance per day (speed × time), km' },
+  { key: 'time', label: 'Time', subtitle: 'Minutes per day' },
+  { key: 'speed', label: 'Speed', subtitle: 'Average speed per day, km/h' },
+  { key: 'incline', label: 'Incline', subtitle: 'Average incline per day, %' },
+  { key: 'climb', label: 'Climb', subtitle: 'Height climbed per day (distance × incline), m' },
+];
+
 // What the charts can show: total weight, % change, best single set, or best set as a
 // multiple of body weight.
 export const MODES = ['total', 'pct', 'best', 'bw'];

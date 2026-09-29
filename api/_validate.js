@@ -71,7 +71,7 @@ export function parseDate(value, now = new Date()) {
 // Returns a normalised entry:
 //   { kind: 'strength', personId, exercise, date, equipment, sets: [{ weight, reps }] }
 //   { kind: 'reps',     personId, exercise, date, equipment: null, sets: [{ weight: null, reps }] }
-//   { kind: 'cardio',   personId, exercise, date, durationMin }
+//   { kind: 'cardio',   personId, exercise, date, durationMin, speedKmh, inclinePct }
 //   { kind: 'running',  personId, exercise, date, runType, runs: [{ distanceKm, seconds }] }
 //     (one run for easy and tempo; one per interval for intervals)
 export function parseNewEntry(body, exercises, now = new Date()) {
@@ -85,7 +85,16 @@ export function parseNewEntry(body, exercises, now = new Date()) {
     if (!Number.isFinite(durationMin) || durationMin <= 0 || durationMin > 600) {
       throw new HttpError(400, 'Cardio duration must be between 1 and 600 minutes.');
     }
-    return { kind: 'cardio', personId, exercise: exercise.id, date, durationMin };
+    const speedKmh = toNumber(body?.speedKmh);
+    if (!Number.isFinite(speedKmh) || speedKmh <= 0 || speedKmh > 40) {
+      throw new HttpError(400, 'Cardio speed must be more than 0 and at most 40 km/h.');
+    }
+    const inclinePct = toNumber(body?.inclinePct);
+    if (!Number.isFinite(inclinePct) || inclinePct < -10 || inclinePct > 40) {
+      throw new HttpError(400, 'Cardio incline must be between -10 and 40%.');
+    }
+    const round1 = (n) => Math.round(n * 10) / 10;
+    return { kind: 'cardio', personId, exercise: exercise.id, date, durationMin, speedKmh: round1(speedKmh), inclinePct: round1(inclinePct) };
   }
 
   if (exercise.kind === 'running') {

@@ -43,13 +43,14 @@ Live at **https://frift.callumlong.com**.
 - **Running.** A tile of its own in Cardio & calisthenics (Cardio is unchanged). A dropdown at the top picks **Easy**, **Tempo** or **Intervals**, and **+** logs a run of that type with a distance (km) and a time (minutes and seconds). Easy charts the distance per day. Tempo charts the best pace, for **5K**, **10K** or **All** (a switch under the dropdown; 5K and 10K allow 5% either way); tempo has 5 km and 10 km quick-pick buttons when logging. Intervals are logged as several distance-and-time pairs and chart the session's average pace (total time ÷ total distance). Pace charts are upside down so faster is higher. Your dropdown and switch choices are remembered in your browser.
 - **Equalise.** A checkbox in A1 that counts dumbbell sets at double weight so they can be compared with barbell lifts. Hover or focus "What is this?" beside it for a one-line explanation.
 - **Hover details.** Hover a date on any weight × reps chart to see every person's value for that day and every set they did.
-- **Add exercise.** A tile after the last chart lets anyone add a new exercise (up to 30 in total), logged either as weight × reps or as **reps only** (for bodyweight moves like pull-ups). New charts appear for everyone.
+- **Add exercise.** A tile after the last chart lets anyone add a new exercise (up to 30 in total), logged either as weight × reps or as **reps only** (for bodyweight moves like pull-ups). Weight exercises also pick a **muscle group**. New charts appear for everyone.
 - **Last 3 weeks.** The second section of A1, with nothing to scroll. One row per person, one box per day, for the current week plus the two before it (`ACTIVITY_WEEKS` in `src/lib/constants.js`). Newest first: the current week comes first, each week runs Sunday back to Monday, and each week is labelled with its Monday's date. A filled box in that person's colour means they logged a set or cardio session that day; hovering it names what. Days later in the current week show as dashed, empty boxes. Today's column is outlined all the way down every row. The rows shrink evenly when there are too many people to fit at full size, the boxes stretch to fit the width, and when it is narrow the names shorten to their first three letters (hover for the full name).
 - **Activity log.** The third section of A1: the 5 most recent sessions (one person, one day) by the date they were for, newest first, with the exercises done. A session logged late, or backdated, appears by its date rather than when it was entered. The line below says how many PRs that session set, with a 🏆 and the exercise names. A PR means the session's best beat every earlier session of that exercise by that person: the heaviest weight for weight × reps (barbell and dumbbell counted separately), the most **total reps in a day** for reps-only (10 + 8 + 6 = 24), and the longest time for cardio. The first ever session of an exercise sets a baseline rather than a PR.
 - **Daily sheet sync.** At 6pm UK time, FRIFT copies new sets from Kenneth's and Kyle's own Google Sheets. See [Daily sheet sync](#daily-sheet-sync).
 - **Daily Discord post.** At 8pm UK time, FRIFT posts to the group's Discord channel: one message per person who logged anything that day, listing their exercises and showing the sets of any PR with a 🏆. See [Daily Discord post](#daily-discord-post).
 - **Dark only.** The app is always dark. Each person's stored colour is shown as a lighter twin, so lines stay easy to read on a dark background; the database still stores the original colour.
-- **Cardio.** Logged as minutes, one entry per person per day.
+- **Cardio.** One session per person per day, logged as **speed (km/h), incline (%) and time (minutes)**. Like Running, a dropdown on the tile picks what it charts: **Distance** (speed × time, km), **Time**, **Speed** (average), **Incline** (time-weighted average) or **Climb** (height gained: distance × incline, in metres). The hover card shows each session in full. Older sessions logged as minutes only appear under Time. Cardio ignores the chart mode buttons.
+- **Muscle group filters.** Buttons beside the Weight training heading (**All · Chest · Back · Shoulders · Biceps · Triceps · Legs**) show only that group's charts. Only groups with exercises get a button, plus **Other** for any exercise without a group. Your choice is remembered in your browser.
 - **Shared passcode.** Everyone types one group passcode to get in.
 
 Starting exercises: Bench press, Lat pull down, Squat, Leg extension, Shoulder press, Incline dumbbell curl, Cardio.
@@ -67,7 +68,7 @@ Sets are stored one row per set. All the chart maths happens in the browser (`sr
 | **Best set** | The day's best set is the **heaviest** set, looking at **all** sets that day (not only the last 3). If two sets share the top weight, the one with more reps wins. The vertical axis is that set's **weight**; hover a point to see its reps. |
 | **Reps-only exercises** | Reps stand in for weight × reps: **total** is the reps of **every** set that day (not only the last 3), **best set** is the most reps in one set, and **% change** is change in that best set's reps. Equalise does not apply. |
 | **× BW** | The best set's weight (as in Best set, doubled for dumbbells when Equalise is on) divided by that person's body weight: the latest reading on or before that day, or their first reading for earlier days. 100 kg at 80 kg body weight is 1.25×. People with no body weight logged are left out. Reps-only and cardio charts show the same as Best set. |
-| **Cardio** (any mode) | Minutes per day. |
+| **Cardio** (own dropdown, ignores the mode) | Distance, time, average speed, average incline or height climbed per day, from each session's speed, incline and minutes. |
 | **Running** (own switch, ignores the mode) | Easy: km per day. Tempo: fastest pace that day at the chosen distance. Intervals: total time ÷ total distance for the session. |
 
 Other rules:
@@ -187,6 +188,7 @@ Defined in `schema.sql`. The script is **idempotent**: safe to run again on a li
 | `weight` | kg. For dumbbells, the weight of **one** dumbbell. Negative for assisted sets (the assistance). Empty for cardio, running and reps-only exercises. |
 | `reps` | Whole number. Empty for cardio. |
 | `duration_min` | Minutes. Cardio only. |
+| `speed_kmh`, `incline_pct` | Cardio speed (km/h) and incline (%). Required for new cardio; empty on older minutes-only sessions. |
 | `run_type` | `easy`, `tempo` or `intervals`. Running only. |
 | `distance_km` | Km, two decimals. Running only. |
 | `duration_sec` | Whole seconds. Running only. |
@@ -329,6 +331,8 @@ frift/
   | `frift.equalise` | Whether Equalise is ticked. |
   | `frift.runType` | The run type the Running tile shows. |
   | `frift.tempoDistance` | `5k`, `10k` or `all` for the Tempo chart. |
+  | `frift.cardioView` | What the Cardio tile charts. |
+  | `frift.muscle` | The Weight training muscle group filter. |
 
   None of this is shared between people or devices.
 - **Dialogs** use the browser's built-in `<dialog>` element, so Escape closes them and focus is handled for you.

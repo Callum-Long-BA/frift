@@ -47,7 +47,10 @@ const number = (n) => Number(n).toLocaleString('en-GB');
 // One set as the message shows it: "40kg x 10" (DB for dumbbells, minus for assisted),
 // "12 reps", "30 min", or for a run "5km in 24:10".
 function formatSet(row, kind) {
-  if (kind === 'cardio') return `${number(row.duration_min)} min`;
+  if (kind === 'cardio') {
+    const base = `${number(row.duration_min)} min`;
+    return row.speed_kmh ? `${base} at ${number(row.speed_kmh)}km/h, ${number(row.incline_pct ?? 0)}% incline` : base;
+  }
   if (kind === 'running') return `${number(row.distance_km)}km in ${formatDuration(row.duration_sec)}`;
   if (kind === 'reps') return `${row.reps} reps`;
   return `${number(row.weight)}kg x ${row.reps}${row.equipment === 'dumbbell' ? ' DB' : ''}`;
