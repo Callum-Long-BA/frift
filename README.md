@@ -4,6 +4,8 @@ A small web app for a group of friends (up to 10) to log their lifting and compa
 
 Live at **https://frift.callumlong.com**.
 
+**Copyright © 2026 Callum Long. All rights reserved.** FRIFT is proprietary: no permission is given to use, copy, modify or distribute it, in whole or in part, without written permission. See [LICENSE](LICENSE).
+
 ---
 
 ## Contents
