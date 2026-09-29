@@ -11,6 +11,7 @@ import RunningChart from './components/RunningChart.jsx';
 import CardioChart from './components/CardioChart.jsx';
 import RoutinesPanel from './components/RoutinesPanel.jsx';
 import RoutineDialog from './components/RoutineDialog.jsx';
+import MobileLog from './components/MobileLog.jsx';
 import { suggestRoutines } from './lib/routines.js';
 import AddEntryDialog from './components/AddEntryDialog.jsx';
 import AddExerciseDialog from './components/AddExerciseDialog.jsx';
@@ -24,6 +25,8 @@ const MODE_KEY = 'frift.mode';
 const EQUALISE_KEY = 'frift.equalise';
 const MUSCLE_KEY = 'frift.muscle';
 const ROUTINE_KEY = 'frift.routine';
+const PHONE_VIEW_KEY = 'frift.phoneView';
+const PHONE_QUERY = '(max-width: 640px)';
 
 export default function App() {
   const [unlocked, setUnlocked] = useState(() => Boolean(getPasscode()));
@@ -45,6 +48,22 @@ export default function App() {
   // The routine this browser is showing (only ever one of the chosen person's own).
   const [routineId, setRoutineId] = useState(() => Number(readStored(ROUTINE_KEY)) || null);
   const [routineDialog, setRoutineDialog] = useState(null); // { routine, initial } while open
+
+  // Phones get the simple view (who, routine, log) unless they switch to the full board.
+  const [isPhone, setIsPhone] = useState(() => window.matchMedia?.(PHONE_QUERY).matches ?? false);
+  const [phoneView, setPhoneView] = useState(() => (readStored(PHONE_VIEW_KEY) === 'full' ? 'full' : 'simple'));
+  useEffect(() => {
+    const query = window.matchMedia?.(PHONE_QUERY);
+    if (!query) return undefined;
+    const onChange = (event) => setIsPhone(event.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  function changePhoneView(next) {
+    setPhoneView(next);
+    writeStored(PHONE_VIEW_KEY, next);
+    window.scrollTo(0, 0);
+  }
   const [dialogExerciseId, setDialogExerciseId] = useState(null);
   const [dialogRunType, setDialogRunType] = useState('easy');
   const [addingExercise, setAddingExercise] = useState(false);
@@ -265,8 +284,86 @@ export default function App() {
     </ErrorBoundary>
   );
 
+  // Dialogs are shared by the full board and the simple phone view.
+  const dialogs = (
+    <>
+      {dialogExercise && me && (
+        <AddEntryDialog
+          key={`${dialogExercise.id}-${me.id}`}
+          exercise={dialogExercise}
+          runType={dialogRunType}
+          person={me}
+          entries={entries}
+          onClose={() => setDialogExerciseId(null)}
+          onSaved={(rows) => setEntries((prev) => [...prev, ...rows])}
+          onDeleted={(id) => setEntries((prev) => prev.filter((e) => e.id !== id))}
+        />
+      )}
+
+      {routineDialog && me && (
+        <RoutineDialog
+          key={routineDialog.routine?.id ?? `new-${routineDialog.initial?.name ?? ''}`}
+          person={me}
+          people={themedPeople}
+          exercises={exercises}
+          routine={routineDialog.routine}
+          initial={routineDialog.initial}
+          onClose={() => setRoutineDialog(null)}
+          onSave={saveRoutine}
+          onDelete={deleteRoutine}
+          onCopy={copyRoutine}
+        />
+      )}
+
+      {addingExercise && me && (
+        <AddExerciseDialog
+          person={me}
+          exercises={exercises}
+          onClose={() => setAddingExercise(false)}
+          onCreated={(exercise) => setExercises((prev) => [...prev, exercise])}
+        />
+      )}
+    </>
+  );
+
+  // On a phone, the simple view (unless they switched to the full board): who, routine, log.
+  if (isPhone && phoneView === 'simple') {
+    return (
+      <main className="mobile" aria-busy={status === 'loading'}>
+        <MobileLog
+          people={themedPeople}
+          me={me}
+          onSelect={selectPerson}
+          routines={routines}
+          activeRoutine={activeRoutine}
+          onPickRoutine={pickRoutine}
+          onNewRoutine={() => setRoutineDialog({ routine: null })}
+          exercises={[...allWeightExercises, ...ccExercises]}
+          entries={entries}
+          status={status}
+          error={error}
+          onRetry={() => load()}
+          onLog={(exercise) => {
+            setDialogRunType('easy');
+            setDialogExerciseId(exercise.id);
+          }}
+          onFullView={() => changePhoneView('full')}
+        />
+        {dialogs}
+      </main>
+    );
+  }
+
   return (
     <main className="board" aria-busy={status === 'loading'}>
+      {isPhone && (
+        <div className="phone-switch">
+          <button type="button" className="ghost small" onClick={() => changePhoneView('simple')}>
+            Simple view
+          </button>
+        </div>
+      )}
+
       {status === 'error' && (
         <div className="banner" role="alert">
           <span>Could not load the data: {error}</span>
@@ -349,42 +446,7 @@ export default function App() {
         {ccExercises.map(renderChart)}
       </div>
 
-      {dialogExercise && me && (
-        <AddEntryDialog
-          key={`${dialogExercise.id}-${me.id}`}
-          exercise={dialogExercise}
-          runType={dialogRunType}
-          person={me}
-          entries={entries}
-          onClose={() => setDialogExerciseId(null)}
-          onSaved={(rows) => setEntries((prev) => [...prev, ...rows])}
-          onDeleted={(id) => setEntries((prev) => prev.filter((e) => e.id !== id))}
-        />
-      )}
-
-      {routineDialog && me && (
-        <RoutineDialog
-          key={routineDialog.routine?.id ?? `new-${routineDialog.initial?.name ?? ''}`}
-          person={me}
-          people={themedPeople}
-          exercises={exercises}
-          routine={routineDialog.routine}
-          initial={routineDialog.initial}
-          onClose={() => setRoutineDialog(null)}
-          onSave={saveRoutine}
-          onDelete={deleteRoutine}
-          onCopy={copyRoutine}
-        />
-      )}
-
-      {addingExercise && me && (
-        <AddExerciseDialog
-          person={me}
-          exercises={exercises}
-          onClose={() => setAddingExercise(false)}
-          onCreated={(exercise) => setExercises((prev) => [...prev, exercise])}
-        />
-      )}
+      {dialogs}
     </main>
   );
 }

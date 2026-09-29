@@ -1,5 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { dayLabel } from '../lib/metrics.js';
+import { readStored, writeStored } from '../lib/storage.js';
+
+// Whether a person has hidden suggested routines in this browser.
+const hideKey = (personId) => `frift.hideSuggestions.${personId}`;
 
 // The right-hand section of the top tile. Lists your routines; picking one filters the page
 // to its exercises ("All exercises" clears it). You can start a new routine, edit the one
@@ -9,6 +13,15 @@ import { dayLabel } from '../lib/metrics.js';
 export default function RoutinesPanel({ me, people, routines, activeId, suggestions = [], onPick, onNew, onEdit, onCopy, onSuggest }) {
   const [copyError, setCopyError] = useState('');
   const [copying, setCopying] = useState(false);
+  const [hideSuggestions, setHideSuggestions] = useState(false);
+  useEffect(() => {
+    setHideSuggestions(me ? readStored(hideKey(me.id)) === '1' : false);
+  }, [me?.id]);
+
+  function toggleSuggestions(hide) {
+    setHideSuggestions(hide);
+    writeStored(hideKey(me.id), hide ? '1' : '0');
+  }
 
   if (!me) {
     return (
@@ -69,9 +82,19 @@ export default function RoutinesPanel({ me, people, routines, activeId, suggesti
         )}
       </div>
 
-      {suggestions.length > 0 && (
+      {suggestions.length > 0 && hideSuggestions && (
+        <button type="button" className="text-btn routine-suggest-show" onClick={() => toggleSuggestions(false)}>
+          Show suggestions
+        </button>
+      )}
+      {suggestions.length > 0 && !hideSuggestions && (
         <div className="routine-suggest">
-          <p className="routine-suggest-label">Suggested from your logs</p>
+          <p className="routine-suggest-label">
+            Suggested from your logs
+            <button type="button" className="text-btn routine-suggest-hide" onClick={() => toggleSuggestions(true)} title="Stop suggesting routines (you can turn them back on)">
+              Hide
+            </button>
+          </p>
           {suggestions.map((s) => (
             <button
               key={s.name}
