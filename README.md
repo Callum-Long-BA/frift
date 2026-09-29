@@ -29,7 +29,7 @@ Live at **https://frift.callumlong.com**.
 
 ## What it does
 
-- **Grid of charts.** Every tile is the same fixed height (340px), however many people there are. On a wide screen the page is four columns. The left three are **Weight training** (weight × reps exercises) and the far right column is **Cardio & calisthenics** (cardio and reps-only exercises). New exercises go to the matching section automatically. Cardio & calisthenics tiles use a very slightly cooler panel colour. Above both sections, the **top tile** (A1) runs the full width, in three sections: controls, the Last 3 weeks grid, and the activity log (the widest of the three). On smaller screens the board drops to two columns and then one, with Weight training first, and the top tile puts the activity log under the other two and then shows one section above another (it is the only tile that grows to fit).
+- **Grid of charts.** Every tile is the same fixed height (340px), however many people there are. On a wide screen the page is four columns. The left three are **Weight training** (weight × reps exercises) and the far right column is **Cardio & calisthenics** (cardio and reps-only exercises). New exercises go to the matching section automatically. Cardio & calisthenics tiles use a very slightly cooler panel colour. Above both sections, the **top tile** (A1) runs the full width, in four sections: controls, the Last 3 weeks grid, the activity log, and routines. On smaller screens the board drops to two columns and then one, with Weight training first, and the top tile becomes 2 × 2 and then one section above another (it is the only tile that grows to fit).
 - **Who are you?** A dropdown in A1 picks who you are, or adds a new person. Choosing yourself thickens your line on every chart, dims everyone else's, and switches on the **+** button on each chart. Your choice is remembered in your browser. There is no separate legend: each name in the Last 3 weeks grid has a line sample in that person's colour, so the grid is the key for the charts.
 - **Logging sets.** Tap **+** on a chart to log sets for that exercise. Every set is logged separately (weight and reps, or just reps for reps-only exercises). You can add several sets at once, pick the date, and delete your own entries to fix mistakes.
 - **Barbell or dumbbell.** Exercises that allow it (Bench press, Squat and Shoulder press to start with) ask whether each batch of sets was barbell or dumbbell.
@@ -50,6 +50,8 @@ Live at **https://frift.callumlong.com**.
 - **Daily Discord post.** At 8pm UK time, FRIFT posts to the group's Discord channel: one message per person who logged anything that day, listing their exercises and showing the sets of any PR with a 🏆. See [Daily Discord post](#daily-discord-post).
 - **Dark only.** The app is always dark. Each person's stored colour is shown as a lighter twin, so lines stay easy to read on a dark background; the database still stores the original colour.
 - **Cardio.** One session per person per day, logged as **speed (km/h), incline (%) and time (minutes)**. Like Running, a dropdown on the tile picks what it charts: **Distance** (speed × time, km), **Time**, **Speed** (average), **Incline** (time-weighted average) or **Climb** (height gained: distance × incline, in metres). The hover card shows each session in full. Older sessions logged as minutes only appear under Time. Cardio ignores the chart mode buttons.
+- **Routines.** The right-hand section of the top tile. Each person can save up to 10 named routines (e.g. "Push Day"), each a set of exercises. Picking one filters the page to just those exercises (the muscle group filters then work within it); **All exercises** shows everything again. **New routine** and **Edit** open a dialog to name it and tick its exercises. An existing routine can be **copied to** someone else from the Edit dialog, and **Copy from** in the section copies someone else's routine to you; if the name is taken the copy is called e.g. "Push Day (from Bill)". Routines are saved in the database; which one you are looking at is remembered in your browser.
+- **Last time.** When you log a weight or reps-only exercise, the dialog shows what you did last time (your most recent earlier day), and each set row shows that day's same-numbered set, with its numbers as the hints in the empty boxes. Cardio and runs (of the same type) show the last session.
 - **Muscle group filters.** Buttons beside the Weight training heading (**All · Chest · Back · Shoulders · Biceps · Triceps · Legs**) show only that group's charts. Under **All**, the charts are grouped the same way (Chest first, then Back, Shoulders, Biceps, Triceps, Legs, then any without a group), each group in the order its exercises were added. Only groups with exercises get a button, plus **Other** for any exercise without a group. Your choice is remembered in your browser.
 - **Shared passcode.** Everyone types one group passcode to get in.
 
@@ -234,6 +236,10 @@ All endpoints live under `/api`, take and return JSON, and are never cached.
 | `GET /api/entries` | Every logged set, oldest first: `id`, `person_id`, `exercise`, `date` (`YYYY-MM-DD`), `set_number`, `weight`, `reps`, `duration_min`, `equipment`. |
 | `POST /api/entries` | Log sets (see below). Returns the rows created. |
 | `DELETE /api/entries?id=12&personId=3` | Delete one entry. Only succeeds if it belongs to that person. |
+| `GET /api/routines` | Every routine: `id`, `person_id`, `name`, `exercise_ids`. |
+| `POST /api/routines` | Create `{ "personId": 1, "name": "Push Day", "exerciseIds": ["bench_press"] }`, or copy `{ "copyFrom": 4, "toPersonId": 2 }`. |
+| `PUT /api/routines` | Update `{ "id": 4, "personId": 1, "name": "Push Day", "exerciseIds": [...] }`. Owner only. |
+| `DELETE /api/routines?id=4&personId=1` | Delete a routine. Owner only. |
 | `GET /api/bodyweights` | Every body weight reading: `person_id`, `date`, `weight_kg`. |
 | `POST /api/bodyweights` | Log a body weight. Body: `{ "personId": 1, "date": "2026-09-23", "weightKg": 80.5 }`. Replaces that person's reading for that day. |
 
@@ -271,6 +277,7 @@ frift/
 ├── api/                       Vercel serverless functions
 │   ├── people.js              GET / POST people
 │   ├── bodyweights.js         GET / POST body weight readings
+│   ├── routines.js            routines: list, create, copy, update, delete
 │   ├── exercises.js           GET / POST exercises
 │   ├── entries.js             GET / POST / DELETE entries
 │   ├── daily-discord.js       8pm Discord post (Vercel Cron)
@@ -333,6 +340,7 @@ frift/
   | `frift.tempoDistance` | `5k`, `10k` or `all` for the Tempo chart. |
   | `frift.cardioView` | What the Cardio tile charts. |
   | `frift.muscle` | The Weight training muscle group filter. |
+  | `frift.routine` | The routine being shown, if any. |
 
   None of this is shared between people or devices.
 - **Dialogs** use the browser's built-in `<dialog>` element, so Escape closes them and focus is handled for you.

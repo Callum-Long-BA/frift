@@ -178,3 +178,23 @@ create table if not exists sheet_cells (
   updated_at timestamptz not null default now(),
   primary key (sheet, cell)
 );
+
+-- Exercises added in the app before muscle groups existed (matched by name).
+update exercises set muscle_group = 'triceps' where muscle_group is null and lower(name) = 'tricep extension';
+update exercises set muscle_group = 'legs' where muscle_group is null and lower(name) in ('leg press', 'seated leg curl');
+
+-- Routines: a person's named set of exercises (e.g. "Push Day"). Picking one filters the
+-- page to those exercises. Names are unique per person, ignoring case.
+create table if not exists routines (
+  id         serial primary key,
+  person_id  int not null references people(id) on delete cascade,
+  name       text not null,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists routines_name_unique on routines (person_id, lower(name));
+
+create table if not exists routine_exercises (
+  routine_id  int not null references routines(id) on delete cascade,
+  exercise_id text not null references exercises(id) on delete cascade,
+  primary key (routine_id, exercise_id)
+);

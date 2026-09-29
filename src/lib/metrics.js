@@ -152,6 +152,22 @@ export function dayLabel(date) {
   });
 }
 
+// What a person did last time for an exercise, before `date`: { date, rows } with that
+// day's entries in set order (for runs, only runs of `runType`), or null if never.
+export function lastSession(entries, personId, exerciseId, date, runType = null) {
+  let last = null;
+  for (const e of entries) {
+    if (e.person_id !== personId || e.exercise !== exerciseId || e.date >= date) continue;
+    if (runType && e.run_type !== runType) continue;
+    if (!last || e.date > last) last = e.date;
+  }
+  if (!last) return null;
+  const rows = entries
+    .filter((e) => e.person_id === personId && e.exercise === exerciseId && e.date === last && (!runType || e.run_type === runType))
+    .sort((a, b) => a.set_number - b.set_number);
+  return { date: last, rows };
+}
+
 // The set number the next logged set will get (matches what the API assigns).
 export function nextSetNumber(entries, personId, exerciseId, date) {
   let highest = 0;

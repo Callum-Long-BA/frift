@@ -15,6 +15,7 @@ import {
   splitAtGaps,
   evenTicks,
   cardioChartData,
+  lastSession,
   bodyWeightOn,
   runningChartData,
   formatDuration,
@@ -625,4 +626,21 @@ test('cardioChartData: older minutes-only entries only count toward time', () =>
   assert.deepEqual(cardioChartData(entries, 'distance').rows.map((r) => r.date), ['2026-09-28']);
   const [detail] = cardioChartData(entries, 'time').rows[1].detail[seriesKey(1)];
   assert.deepEqual(detail, { minutes: 30, speed: 6, incline: 10 });
+});
+
+// ---------- last time ----------
+
+test('lastSession: the most recent day before the chosen date, sets in order', () => {
+  const entries = [
+    set(1, '2026-09-20', 1, 60, 8),
+    set(1, '2026-09-24', 2, 65, 6),
+    set(1, '2026-09-24', 1, 62.5, 8),
+    set(1, '2026-09-29', 1, 70, 5), // the day being logged: not "last time"
+    set(2, '2026-09-26', 1, 100, 5), // someone else
+  ];
+  const last = lastSession(entries, 1, 'bench_press', '2026-09-29');
+  assert.equal(last.date, '2026-09-24');
+  assert.deepEqual(last.rows.map((r) => [r.set_number, r.weight, r.reps]), [[1, 62.5, 8], [2, 65, 6]]);
+  assert.equal(lastSession(entries, 1, 'bench_press', '2026-09-20'), null);
+  assert.equal(lastSession(entries, 1, 'squat', '2026-09-29'), null);
 });

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { route, HttpError } from '../api/_http.js';
-import { parseBodyWeight, parseDate, parseExerciseName, parseName, parseNewEntry, slugify } from '../api/_validate.js';
+import { copyName, parseBodyWeight, parseDate, parseExerciseName, parseName, parseNewEntry, parseRoutine, slugify } from '../api/_validate.js';
 
 process.env.FRIFT_PASSCODE = 'secret-lift';
 
@@ -212,4 +212,19 @@ test('parseBodyWeight keeps one decimal and checks the range', () => {
   for (const weightKg of ['', 19.9, 400.1, 'abc']) {
     assert.throws(() => parseBodyWeight({ personId: 1, date: '2026-09-19', weightKg }, now), HttpError);
   }
+});
+
+test('parseRoutine: trims the name, needs known exercises, drops duplicates', () => {
+  const known = new Set(['bench_press', 'squat']);
+  assert.deepEqual(parseRoutine({ name: '  Push   Day ', exerciseIds: ['bench_press', 'bench_press'] }, known), { name: 'Push Day', exerciseIds: ['bench_press'] });
+  for (const body of [{ name: '', exerciseIds: ['squat'] }, { name: 'x'.repeat(31), exerciseIds: ['squat'] }, { name: 'Legs', exerciseIds: [] }, { name: 'Legs', exerciseIds: ['deadlift'] }]) {
+    assert.throws(() => parseRoutine(body, known), HttpError);
+  }
+});
+
+test('copyName keeps the name if free, else says who it came from', () => {
+  assert.equal(copyName('Push Day', 'Bill', ['Legs']), 'Push Day');
+  assert.equal(copyName('Push Day', 'Bill', ['push day']), 'Push Day (from Bill)');
+  assert.equal(copyName('Push Day', 'Bill', ['Push Day', 'Push Day (from Bill)']), 'Push Day (from Bill) 2');
+  assert.ok(copyName('A very long routine name here', 'Bartholomew', ['A very long routine name here']).length <= 30);
 });
