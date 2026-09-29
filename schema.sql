@@ -198,3 +198,4 @@ create table if not exists routine_exercises (
   exercise_id text not null references exercises(id) on delete cascade,
   primary key (routine_id, exercise_id)
 );
+update exercises set muscle_group = 'triceps' where muscle_group is null and lower(name) = 'tricep extension (machine)';

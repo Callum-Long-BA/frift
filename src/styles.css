@@ -904,6 +904,50 @@ fieldset {
   gap: 2px 14px;
 }
 
+/* Suggested routines: a dashed "add" button each. */
+.routine-suggest {
+  display: grid;
+  gap: 4px;
+}
+
+.routine-suggest-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--a1-muted);
+}
+
+.suggest-btn {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px dashed var(--a1-field-line);
+  border-radius: var(--radius-control);
+  color: var(--a1-text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.suggest-btn:hover {
+  border-color: var(--plate);
+}
+
+.suggest-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--a1-muted);
+}
+
 .routine-copy {
   display: grid;
   gap: 4px;
