@@ -130,7 +130,13 @@ export default function App() {
 
   // Weighted exercises fill the left three columns; cardio and reps-only exercises
   // stack in the far right column. Each keeps its own sort order.
-  const allWeightExercises = exercises.filter((e) => e.kind === 'strength');
+  // Grouped by muscle, in the filter buttons' order (anything without a group last); within a
+  // group, the order they were added. Array.prototype.sort is stable, so that order is kept.
+  const groupRank = (e) => {
+    const i = MUSCLE_GROUPS.findIndex((g) => g.key === e.muscle_group);
+    return i === -1 ? MUSCLE_GROUPS.length : i;
+  };
+  const allWeightExercises = exercises.filter((e) => e.kind === 'strength').sort((a, b) => groupRank(a) - groupRank(b));
   // Quick filter buttons: only groups that have exercises, plus Other if any lack a group.
   const muscleFilters = [
     { key: 'all', label: 'All' },
