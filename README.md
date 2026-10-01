@@ -234,7 +234,7 @@ All endpoints live under `/api`, take and return JSON, and are never cached.
 | `POST /api/people` | Add a person. Body: `{ "name": "Sam" }`. The colour is assigned automatically. Fails with `409` if the name is taken or 10 people already exist. |
 | `GET /api/exercises` | All exercises in chart order: `id`, `name`, `kind`, `equipment_choice`, `created_by`, `sort_order`. |
 | `GET /api/sheet-sync` | Sync the Google Sheets now and return what was added, replaced, unchanged or left alone, per person. Vercel Cron calls it at 6pm with `CRON_SECRET`. |
-| `GET /api/daily-discord` | Post a day's entries to Discord now and return `{ date, posted, webhook, links }`, with a link to each message posted. `?check=1` posts nothing and only reports the webhook's server and channel. Defaults to today (UK time); add `?date=2026-09-22` for another day. Vercel Cron calls it at 8pm with `CRON_SECRET` instead of the passcode. |
+| `GET /api/daily-discord` | Post a day's entries to Discord now and return `{ date, posted, webhook, links }`, with a link to each message posted. `?check=1` posts nothing and only reports the webhook's server and channel. Defaults to today (UK time); add `?date=2026-09-22` for another day, and `?person=Callum` to post only that person's message. Vercel Cron calls it at 8pm with `CRON_SECRET` instead of the passcode. |
 | `POST /api/exercises` | Add an exercise. Body: `{ "name": "Romanian deadlift", "personId": 1, "kind": "strength", "equipmentChoice": true }`. `kind` is `strength` (weight × reps, the default) or `reps` (reps only; `equipmentChoice` is ignored). Fails with `409` if the name exists or 30 exercises exist. |
 | `GET /api/entries` | Every logged set, oldest first: `id`, `person_id`, `exercise`, `date` (`YYYY-MM-DD`), `set_number`, `weight`, `reps`, `duration_min`, `equipment`. |
 | `POST /api/entries` | Log sets (see below). Returns the rows created. |
@@ -536,7 +536,7 @@ For weights and runs, every set is listed with 🏆 on the one that made the rec
 1. Run the latest `schema.sql` in Neon (it adds the `discord_posts` table).
 2. In Discord: open **#fitness** > **Edit Channel** > **Integrations** > **Webhooks** > **New Webhook**. Name it FRIFT, then **Copy Webhook URL**. You need the Manage Webhooks permission on the server.
 3. In Vercel > Settings > Environment Variables, add `DISCORD_WEBHOOK_URL` (that URL) and `CRON_SECRET` (any long random string), then redeploy.
-4. To test without waiting for 8pm, open the browser console on the live site and run the line below. It posts today's messages straight away and does not stop the 8pm post.
+4. To test without waiting for 8pm, open the browser console on the live site and run the line below. It posts today's messages straight away and does not stop the 8pm post. To post for just one person (say they logged after 8pm), add `?person=Name` to the address: `/api/daily-discord?person=Callum`.
    `await (await fetch('/api/daily-discord', { headers: { 'x-frift-passcode': localStorage.getItem('frift.passcode') } })).json()`
 
    The result includes `links`, one per message posted: open one to jump straight to it in Discord. To see which server and channel the webhook posts to **without** posting anything, add `?check=1` to the address (`/api/daily-discord?check=1`); the `channelLink` in the result opens that channel. FRIFT refuses a `DISCORD_WEBHOOK_URL` that is not a webhook (for example a copied channel link), with a message saying so.
