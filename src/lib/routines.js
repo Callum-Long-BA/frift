@@ -95,3 +95,19 @@ export function suggestRoutines(entries, exercises, personId, today, routines = 
   }
   return suggestions;
 }
+
+// The routine (of `routines`, one person's own) that a day's exercises most look like, or
+// null if none is alike enough (the same test as grouping days for suggestions).
+export function matchRoutine(exerciseIds, routines) {
+  const done = new Set(exerciseIds);
+  let best = null;
+  let bestScore = SAME_DAY_TYPE;
+  for (const r of routines) {
+    const score = similarity(done, new Set(r.exercise_ids));
+    if (score >= bestScore) {
+      best = r;
+      bestScore = score;
+    }
+  }
+  return best;
+}

@@ -388,7 +388,7 @@ export default function App() {
         {status === 'ready' && (
           <>
             <ActivityStrip people={themedPeople} entries={entries} exercises={exercises} me={me} />
-            <ActivityLog people={themedPeople} entries={entries} exercises={exercises} />
+            <ActivityLog people={themedPeople} entries={entries} exercises={exercises} routines={routines} />
             <RoutinesPanel
               me={me}
               people={themedPeople}
