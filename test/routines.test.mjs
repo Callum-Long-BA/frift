@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { routineName, similarity, suggestRoutines } from '../src/lib/routines.js';
+import { matchRoutine, routineName, similarity, suggestRoutines } from '../src/lib/routines.js';
 
 const exercises = [
   { id: 'bench_press', kind: 'strength', muscle_group: 'chest' },
@@ -66,4 +66,15 @@ test('no suggestion once you have a routine with nearly the same exercises; name
   assert.deepEqual(suggestRoutines(entries, exercises, 1, today, [{ name: 'Mine', exercise_ids: push }]), []);
   const [s] = suggestRoutines(entries, exercises, 1, today, [{ name: 'Push day', exercise_ids: ['squat', 'leg_extension'] }]);
   assert.equal(s.name, 'Push day 2');
+});
+
+test('matchRoutine: the most alike of a person\'s routines, if alike enough', () => {
+  const routines = [
+    { name: 'Push Day', exercise_ids: push },
+    { name: 'Pull Day', exercise_ids: pull },
+  ];
+  assert.equal(matchRoutine([...push, 'cardio'], routines).name, 'Push Day'); // 4 of 5 in common
+  assert.equal(matchRoutine(['lat_pulldown', 'seated_row'], routines).name, 'Pull Day'); // 2 of 3
+  assert.equal(matchRoutine(['squat', 'leg_extension'], routines), null);
+  assert.equal(matchRoutine(push, []), null);
 });

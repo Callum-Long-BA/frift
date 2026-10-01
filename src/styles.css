@@ -873,6 +873,12 @@ fieldset {
   content: '· ';
 }
 
+/* A session that matches one of the person's routines shows the routine's name. */
+.log-what.is-routine {
+  color: var(--a1-text);
+  font-weight: 600;
+}
+
 .log-prs {
   padding-left: 18px; /* lines up under the name, past the swatch */
   font-size: 0.82rem;
