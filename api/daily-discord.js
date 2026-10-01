@@ -15,6 +15,8 @@ import { parseDate } from './_validate.js';
 // Run by hand with the passcode (GET /api/daily-discord, optionally ?date=2026-09-22) it
 // posts straight away, whatever the time, and does not stop the 8pm post. The result links
 // to every message posted, so you can see exactly where they went.
+// Add ?person=Callum to post only that person's message (for someone who logged after 8pm),
+// so nobody else gets theirs twice.
 // GET /api/daily-discord?check=1 posts nothing: it only says which server and channel the
 // webhook in DISCORD_WEBHOOK_URL posts to.
 
@@ -47,7 +49,15 @@ export default route(
             from entries where entry_date <= ${date}::date`,
       ]);
 
-      const messages = buildDailyMessages({ people, exercises, entries, date });
+      let messages = buildDailyMessages({ people, exercises, entries, date });
+      // A manual run can be limited to one person, by name (ignoring case) or id.
+      const only = !scheduled && req.query?.person ? String(req.query.person).trim().toLowerCase() : null;
+      if (only) {
+        const person = people.find((p) => p.name.toLowerCase() === only || String(p.id) === only);
+        if (!person) throw new HttpError(404, `There is no one called "${req.query.person}" in FRIFT.`);
+        messages = messages.filter((m) => m.personId === person.id);
+        if (messages.length === 0) return { date, posted: 0, note: `${person.name} has nothing logged for ${date}.`, webhook };
+      }
       if (messages.length === 0) return { date, posted: 0, webhook };
 
       if (scheduled) {
