@@ -28,6 +28,7 @@ export default function MobileLog({
   onRetry,
   onLog,
   onFullView,
+  noteFor = () => null,
 }) {
   const today = todayString();
   const mine = me ? routines.filter((r) => r.person_id === me.id) : [];
@@ -42,6 +43,10 @@ export default function MobileLog({
           Full view
         </button>
       </header>
+
+      <p className="watch-reminder" role="note">
+        <span aria-hidden="true">⌚</span> Remember to record this workout on your watch too.
+      </p>
 
       {status === 'error' && (
         <div className="banner" role="alert">
@@ -100,6 +105,7 @@ export default function MobileLog({
                 .filter((e) => e.person_id === me.id && e.exercise === exercise.id && e.date === today)
                 .sort((a, b) => a.set_number - b.set_number);
               const last = todayRows.length === 0 ? lastSession(entries, me.id, exercise.id, today) : null;
+              const note = noteFor(exercise.id);
               return (
                 <li key={exercise.id} className={todayRows.length > 0 ? 'mobile-exercise is-done' : 'mobile-exercise'}>
                   <div className="mobile-exercise-text">
@@ -114,6 +120,7 @@ export default function MobileLog({
                           ? `Last time (${dayLabel(last.date)}): ${setsText(exercise, last.rows)}`
                           : 'Not logged yet'}
                     </p>
+                    {note && <p className="mobile-exercise-note is-note">📝 {note.note}</p>}
                   </div>
                   <button type="button" className="primary mobile-log-btn" onClick={() => onLog(exercise)} aria-label={`Log ${exercise.name}`}>
                     {todayRows.length > 0 ? 'Add' : 'Log'}

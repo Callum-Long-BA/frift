@@ -155,12 +155,20 @@ test('planCells: body weights are new, updated or recorded like set cells', () =
 test('warningMessage: one line for Discord, or nothing when all went well', () => {
   assert.equal(warningMessage('Kyle', { unmapped: [], problems: [] }), null);
   assert.equal(
-    warningMessage('Kyle', { unmapped: ['Pec deck'], problems: [{ line: 12, name: 'Squat', message: '"Squat" is not weight x reps' }] }),
-    '⚠️ FRIFT sheet sync for Kyle: not sure which FRIFT exercise "Pec deck" is, so it was skipped. skipped row 12 Squat "Squat" is not weight x reps.',
+    warningMessage('Kyle', { unmapped: ['Pec deck'], problems: [{ name: 'deadlift', message: 'is not an exercise in FRIFT' }] }),
+    '⚠️ FRIFT sheet sync for Kyle: not sure which FRIFT exercise "Pec deck" is, so it was skipped. skipped deadlift is not an exercise in FRIFT.',
   );
   assert.match(warningMessage('Kenneth', { failure: 'could not read the sheet: Google Sheets returned 500' }), /^⚠️ FRIFT sheet sync for Kenneth: could not read the sheet/);
 });
 
 test('every mapped exercise name is lower case, so lookups match', () => {
   for (const sheet of SHEETS) for (const name of Object.keys(sheet.map)) assert.equal(name, name.toLowerCase());
+});
+
+test('warningMessage: cells typed in the wrong format ("Do 35") are not posted to Discord', () => {
+  const formatOnly = [{ line: 12, name: 'Squat', message: '"Do 35" is not weight x reps', format: true }];
+  assert.equal(warningMessage('Kyle', { unmapped: [], problems: formatOnly }), null);
+  const p = plan({ cells: [{ key: '0:9:1', line: 9, name: 'Lat raises', date: '2026-09-28', text: 'Do 35', set: null }] });
+  assert.equal(p.problems.length, 1); // still in the sync's result
+  assert.equal(p.problems[0].format, true);
 });

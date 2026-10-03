@@ -1,5 +1,7 @@
 {
   "crons": [
+    { "path": "/api/sheet-sync", "schedule": "15 14 * * *" },
+    { "path": "/api/sheet-sync", "schedule": "15 15 * * *" },
     { "path": "/api/sheet-sync", "schedule": "0 17 * * *" },
     { "path": "/api/sheet-sync", "schedule": "0 18 * * *" },
     { "path": "/api/daily-discord", "schedule": "0 19 * * *" },

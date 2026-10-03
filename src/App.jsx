@@ -45,6 +45,7 @@ export default function App() {
   // Weight training quick filter: 'all', a MUSCLE_GROUPS key, or 'other' (no group yet).
   const [muscle, setMuscle] = useState(() => readStored(MUSCLE_KEY) || 'all');
   const [routines, setRoutines] = useState([]);
+  const [notes, setNotes] = useState([]); // [{ person_id, exercise_id, note, updated_at }]
   // The routine this browser is showing (only ever one of the chosen person's own).
   const [routineId, setRoutineId] = useState(() => Number(readStored(ROUTINE_KEY)) || null);
   const [routineDialog, setRoutineDialog] = useState(null); // { routine, initial } while open
@@ -75,7 +76,7 @@ export default function App() {
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setStatus('loading');
     try {
-      const [nextPeople, nextExercises, nextEntries, nextBodyWeights, nextRoutines] = await Promise.all([
+      const [nextPeople, nextExercises, nextEntries, nextBodyWeights, nextRoutines, nextNotes] = await Promise.all([
         api.people(),
         api.exercises(),
         api.entries(),
@@ -89,12 +90,18 @@ export default function App() {
           if (err instanceof AuthError) throw err;
           return [];
         }),
+        // Nor should notes for next time.
+        api.notes().catch((err) => {
+          if (err instanceof AuthError) throw err;
+          return [];
+        }),
       ]);
       setPeople(nextPeople);
       setExercises(nextExercises);
       setEntries(nextEntries);
       setBodyWeights(nextBodyWeights);
       setRoutines(nextRoutines);
+      setNotes(nextNotes);
       setError('');
       setStatus('ready');
     } catch (err) {
@@ -196,6 +203,17 @@ export default function App() {
   }
   const ccExercises = exercises.filter((e) => e.kind !== 'strength' && inRoutine(e));
 
+  const noteFor = (exerciseId) => (me ? notes.find((n) => n.person_id === me.id && n.exercise_id === exerciseId) ?? null : null);
+
+  // Save (or, if empty, remove) the chosen person's note for next time on one exercise.
+  async function saveNote(exerciseId, text) {
+    const saved = await api.saveNote(me.id, exerciseId, text);
+    setNotes((prev) => [
+      ...prev.filter((n) => !(n.person_id === me.id && n.exercise_id === exerciseId)),
+      ...(saved.deleted ? [] : [saved]),
+    ]);
+  }
+
   function pickRoutine(id) {
     setRoutineId(id);
     writeStored(ROUTINE_KEY, id ? String(id) : '');
@@ -294,6 +312,8 @@ export default function App() {
           runType={dialogRunType}
           person={me}
           entries={entries}
+          note={noteFor(dialogExercise.id)}
+          onSaveNote={(text) => saveNote(dialogExercise.id, text)}
           onClose={() => setDialogExerciseId(null)}
           onSaved={(rows) => setEntries((prev) => [...prev, ...rows])}
           onDeleted={(id) => setEntries((prev) => prev.filter((e) => e.id !== id))}
@@ -340,6 +360,7 @@ export default function App() {
           onNewRoutine={() => setRoutineDialog({ routine: null })}
           exercises={[...allWeightExercises, ...ccExercises]}
           entries={entries}
+          noteFor={noteFor}
           status={status}
           error={error}
           onRetry={() => load()}
