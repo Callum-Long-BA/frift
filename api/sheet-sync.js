@@ -4,7 +4,7 @@ import { londonNow } from './_discord.js';
 import { postToDiscord } from './_webhook.js';
 import { SHEETS, planCells, readTab, tabCsvUrl, warningMessage } from './_sheets.js';
 
-// Copies new sets from people's own Google Sheets into FRIFT at 6pm UK time (see
+// Copies new sets from people's own Google Sheets into FRIFT at 3:15pm and 6pm UK time (see
 // api/_sheets.js for which sheets and how they are read).
 //
 // Every set cell is tracked in the sheet_cells table. A cell filled in since the last run
@@ -21,10 +21,12 @@ import { SHEETS, planCells, readTab, tabCsvUrl, warningMessage } from './_sheets
 // not "weight x reps", a sheet that cannot be read) is skipped and reported in one Discord
 // message per sheet, and tried again on the next run.
 //
-// Vercel Cron calls this at 17:00 and 18:00 UTC; only the call in the 6pm London hour runs.
+// Vercel Cron calls this at 14:15 / 15:15 and 17:00 / 18:00 UTC; only the calls that land in
+// the 3pm and 6pm London hours run, so it stays at 3:15pm and 6pm through summer and winter time.
 // Run it by hand with the passcode (GET /api/sheet-sync) to sync straight away.
 
-const SYNC_HOUR = 18;
+// Runs at 3:15pm and 6pm UK time (see vercel.json).
+const SYNC_HOURS = [15, 18];
 
 async function fetchTab(url) {
   let res;
@@ -154,8 +156,8 @@ export default route(
     async GET(req) {
       const scheduled = isCron(req);
       const now = londonNow();
-      if (scheduled && now.hour !== SYNC_HOUR) {
-        return { skipped: `It is ${now.hour}:00 in London, not ${SYNC_HOUR}:00.` };
+      if (scheduled && !SYNC_HOURS.includes(now.hour)) {
+        return { skipped: `It is ${now.hour}:00 in London, not a sync time.` };
       }
 
       const sql = db();

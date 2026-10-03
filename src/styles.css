@@ -1065,6 +1065,18 @@ fieldset {
   font-size: 2.8rem;
 }
 
+.watch-reminder {
+  padding: 10px 12px;
+  background: var(--raised);
+  border-left: 3px solid var(--plate);
+  border-radius: var(--radius-control);
+  font-size: 0.95rem;
+}
+
+.mobile-exercise-note.is-note {
+  color: #f5c86a;
+}
+
 .mobile-step {
   display: grid;
   gap: 10px;
@@ -1471,6 +1483,58 @@ fieldset {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-2);
+}
+
+/* The person's note for next time, and the full history list. */
+.note-reminder {
+  padding: 8px 10px;
+  background: rgba(245, 200, 106, 0.12);
+  border: 1px solid rgba(245, 200, 106, 0.35);
+  border-radius: var(--radius-control);
+  font-size: 0.9rem;
+}
+
+.history-list {
+  display: grid;
+  gap: 4px;
+  max-height: 30vh;
+  margin-top: 6px;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-list li {
+  display: flex;
+  gap: 10px;
+  padding: 3px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.history-date {
+  flex: none;
+  width: 6.5rem;
+  color: var(--text-2);
+}
+
+.note-field textarea {
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+
+.note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
 }
 
 .last-hint {

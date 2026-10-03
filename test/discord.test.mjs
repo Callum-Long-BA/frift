@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDailyMessages, discordLink, escapeMarkdown, isWebhookUrl, londonNow } from '../api/_discord.js';
+import { buildDailyMessages, discordLink, escapeMarkdown, isWebhookUrl, londonNow, repGain } from '../api/_discord.js';
 import { route } from '../api/_http.js';
 
 test('londonNow follows UK summer and winter time', () => {
@@ -166,4 +166,24 @@ test('cardio shows speed and incline when they were logged', () => {
   const withPr = [row(1, '2026-09-15', 'cardio', 1, { duration_min: 20 }), ...rows];
   const [pr] = buildDailyMessages({ people, exercises, entries: withPr, date: today });
   assert.equal(pr.payload.content, 'Sam worked out today ✅ ->\n* Cardio [PR! 🏆 30 min at 6.5km/h, 8% incline]');
+});
+
+test('repGain: more reps than last time at the same weight and equipment; heaviest, then biggest gain', () => {
+  const r = (weight, reps, equipment = null) => ({ weight, reps, equipment });
+  assert.deepEqual(repGain([r(60, 10)], [r(60, 8), r(60, 7)]), { row: r(60, 10), gain: 2 });
+  assert.equal(repGain([r(60, 8)], [r(60, 8)]), null); // the same is not a gain
+  assert.equal(repGain([r(62.5, 10)], [r(60, 8)]), null); // a different weight
+  assert.equal(repGain([r(25, 12, 'dumbbell')], [r(25, 10)]), null); // dumbbell vs barbell
+  assert.deepEqual(repGain([r(50, 12), r(60, 9)], [r(50, 10), r(60, 8)]).row, r(60, 9)); // heaviest wins
+});
+
+test('a day with more reps at last time\'s weight gets the bulleted format with ⬆️', () => {
+  const rows = [
+    row(1, '2026-09-15', 'bench_press', 1, { weight: 62.5, reps: 5 }),
+    row(1, '2026-09-15', 'bench_press', 2, { weight: 60, reps: 8 }),
+    row(1, today, 'bench_press', 1, { weight: 60, reps: 10 }), // no PR (62.5 is heavier), but +2 reps at 60
+    row(1, today, 'pull_ups', 1, { reps: 12 }),
+  ];
+  const [sam] = buildDailyMessages({ people, exercises, entries: rows, date: today });
+  assert.equal(sam.payload.content, 'Sam worked out today ✅ ->\n* Bench press [⬆️ 60kg x 10 (+2 reps)]\n* Pull ups');
 });

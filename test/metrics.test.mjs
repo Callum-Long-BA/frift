@@ -16,6 +16,7 @@ import {
   evenTicks,
   cardioChartData,
   lastSession,
+  exerciseHistory,
   bodyWeightOn,
   runningChartData,
   formatDuration,
@@ -643,4 +644,11 @@ test('lastSession: the most recent day before the chosen date, sets in order', (
   assert.deepEqual(last.rows.map((r) => [r.set_number, r.weight, r.reps]), [[1, 62.5, 8], [2, 65, 6]]);
   assert.equal(lastSession(entries, 1, 'bench_press', '2026-09-20'), null);
   assert.equal(lastSession(entries, 1, 'squat', '2026-09-29'), null);
+});
+
+test('exerciseHistory: every day a person did an exercise, newest first, sets in order', () => {
+  const entries = [set(1, '2026-09-01', 1, 60, 8), set(1, '2026-09-08', 2, 65, 6), set(1, '2026-09-08', 1, 62.5, 8), set(2, '2026-09-10', 1, 99, 1)];
+  const h = exerciseHistory(entries, 1, 'bench_press');
+  assert.deepEqual(h.map((d) => d.date), ['2026-09-08', '2026-09-01']);
+  assert.deepEqual(h[0].rows.map((r) => r.set_number), [1, 2]);
 });

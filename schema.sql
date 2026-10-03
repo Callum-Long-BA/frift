@@ -199,3 +199,13 @@ create table if not exists routine_exercises (
   primary key (routine_id, exercise_id)
 );
 update exercises set muscle_group = 'triceps' where muscle_group is null and lower(name) = 'tricep extension (machine)';
+
+-- A note or reminder for next time, per person per exercise ("Try 65kg"). Shown when that
+-- person next logs the exercise. One per person per exercise; saving an empty note removes it.
+create table if not exists exercise_notes (
+  person_id   int not null references people(id) on delete cascade,
+  exercise_id text not null references exercises(id) on delete cascade,
+  note        text not null check (char_length(note) between 1 and 300),
+  updated_at  timestamptz not null default now(),
+  primary key (person_id, exercise_id)
+);

@@ -259,7 +259,7 @@ export function planCells({ cells, bodyWeights = [], seen, config, today, seedin
     const prior = seen.get(c.key);
     if (prior) {
       if (prior.value === c.text) continue;
-      if (!c.set) plan.problems.push({ line: c.line, name: c.name, message: `"${c.text}" is not weight x reps` });
+      if (!c.set) plan.problems.push({ line: c.line, name: c.name, message: `"${c.text}" is not weight x reps`, format: true });
       else if (prior.entry_id && mapped) plan.updates.push({ key: c.key, entryId: prior.entry_id, weight: c.set.weight, reps: c.set.reps, value: c.text });
       else plan.remember.push({ key: c.key, value: c.text });
       continue;
@@ -273,7 +273,7 @@ export function planCells({ cells, bodyWeights = [], seen, config, today, seedin
       }
     }
     if (!c.set) {
-      plan.problems.push({ line: c.line, name: c.name, message: `"${c.text}" is not weight x reps` });
+      plan.problems.push({ line: c.line, name: c.name, message: `"${c.text}" is not weight x reps`, format: true });
       continue;
     }
     if (!mapped) {
@@ -292,7 +292,7 @@ export function planCells({ cells, bodyWeights = [], seen, config, today, seedin
     const prior = seen.get(b.key);
     if (prior) {
       if (prior.value === b.text) continue;
-      if (b.kg === null) plan.problems.push({ line: b.line, name: 'Weight', message: `"${b.text}" is not a weight in kg` });
+      if (b.kg === null) plan.problems.push({ line: b.line, name: 'Weight', message: `"${b.text}" is not a weight in kg`, format: true });
       else if (prior.bw_date) plan.bwUpdates.push({ key: b.key, date: prior.bw_date, kg: b.kg, value: b.text });
       else plan.remember.push({ key: b.key, value: b.text });
       continue;
@@ -301,7 +301,7 @@ export function planCells({ cells, bodyWeights = [], seen, config, today, seedin
       plan.remember.push({ key: b.key, value: b.text });
       continue;
     }
-    if (b.kg === null) plan.problems.push({ line: b.line, name: 'Weight', message: `"${b.text}" is not a weight in kg` });
+    if (b.kg === null) plan.problems.push({ line: b.line, name: 'Weight', message: `"${b.text}" is not a weight in kg`, format: true });
     else plan.newBodyWeights.push({ key: b.key, kg: b.kg, value: b.text });
   }
 
@@ -311,7 +311,10 @@ export function planCells({ cells, bodyWeights = [], seen, config, today, seedin
 }
 
 // One Discord line about what could not be imported, or null if there is nothing to say.
-export function warningMessage(person, { unmapped = [], problems = [], failure = null }) {
+// Cells typed in the wrong format (e.g. "Do 35") are left out: they are skipped quietly,
+// still listed in the sync's result, and imported once they are corrected.
+export function warningMessage(person, { unmapped = [], problems: all = [], failure = null }) {
+  const problems = all.filter((p) => !p.format);
   const parts = [];
   if (failure) parts.push(failure);
   if (unmapped.length > 0) {

@@ -44,6 +44,8 @@ export const api = {
   entries: () => request('entries'),
   addEntry: (payload) => request('entries', { method: 'POST', body: payload }),
   deleteEntry: (id, personId) => request(`entries?id=${id}&personId=${personId}`, { method: 'DELETE' }),
+  notes: () => request('notes'),
+  saveNote: (personId, exerciseId, note) => request('notes', { method: 'PUT', body: { personId, exerciseId, note } }),
   routines: () => request('routines'),
   addRoutine: (personId, name, exerciseIds) => request('routines', { method: 'POST', body: { personId, name, exerciseIds } }),
   updateRoutine: (id, personId, name, exerciseIds) =>

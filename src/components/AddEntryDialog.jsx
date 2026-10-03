@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { COUNTED_SETS, MAX_SETS_PER_ENTRY, MAX_WEIGHT, MIN_WEIGHT, RUN_TYPES, RUN_TYPE_LABELS } from '../lib/constants.js';
-import { dayLabel, lastSession, nextSetNumber, todayString } from '../lib/metrics.js';
+import { dayLabel, exerciseHistory, lastSession, nextSetNumber, todayString } from '../lib/metrics.js';
 import { runText } from './RunningChart.jsx';
 import { cardioText } from './CardioChart.jsx';
 
 const EMPTY_RUN = { km: '', min: '', sec: '' };
 
 // `runType` is the run type the Running tile was showing, used as the starting choice.
-export default function AddEntryDialog({ exercise, person, entries, runType: initialRunType = 'easy', onClose, onSaved, onDeleted }) {
+// `note` is this person's note for next time on this exercise (or null); `onSaveNote(text)`
+// saves it (empty removes it).
+export default function AddEntryDialog({ exercise, person, entries, note = null, onSaveNote, runType: initialRunType = 'easy', onClose, onSaved, onDeleted }) {
   const dialogRef = useRef(null);
   const [date, setDate] = useState(() => todayString());
   const [sets, setSets] = useState([{ weight: '', reps: '' }]);
@@ -17,6 +19,9 @@ export default function AddEntryDialog({ exercise, person, entries, runType: ini
   const [incline, setIncline] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
+  const [noteText, setNoteText] = useState(note?.note ?? '');
+  const [noteState, setNoteState] = useState(''); // '', 'saving', 'saved'
   const isCardio = exercise.kind === 'cardio';
   const isRunning = exercise.kind === 'running';
   const repsOnly = exercise.kind === 'reps';
@@ -56,11 +61,25 @@ export default function AddEntryDialog({ exercise, person, entries, runType: ini
   );
   const lastSet = (n) => last?.rows.find((r) => r.set_number === n) ?? null;
   const setText = (r) => (r.weight === null ? `${r.reps} reps` : `${r.weight} kg × ${r.reps}${r.equipment === 'dumbbell' ? ' DB' : ''}`);
-  let lastSummary = null;
-  if (last) {
-    if (isCardio) lastSummary = last.rows.map((r) => cardioText(r.duration_min, r.speed_kmh, r.incline_pct)).join('; ');
-    else if (isRunning) lastSummary = last.rows.map((r) => runText({ distanceKm: r.distance_km, seconds: r.duration_sec })).join(', ');
-    else lastSummary = last.rows.map(setText).join(', ');
+  // One day's sets as text, for "last time" and the full history.
+  const dayText = (rows) => {
+    if (isCardio) return rows.map((r) => cardioText(r.duration_min, r.speed_kmh, r.incline_pct)).join('; ');
+    if (isRunning) return rows.map((r) => `${r.run_type}: ${runText({ distanceKm: r.distance_km, seconds: r.duration_sec })}`).join(', ');
+    return rows.map(setText).join(', ');
+  };
+  const lastSummary = last ? dayText(last.rows) : null;
+  const history = useMemo(() => exerciseHistory(entries, person.id, exercise.id), [entries, person.id, exercise.id]);
+  const noteChanged = noteText.trim() !== (note?.note ?? '');
+
+  async function saveNote() {
+    setNoteState('saving');
+    try {
+      await onSaveNote(noteText.trim());
+      setNoteState('saved');
+    } catch (err) {
+      setError(err.message);
+      setNoteState('');
+    }
   }
   // Weights: only the last few sets count toward Total. Reps-only: every set counts.
   const countedIds = new Set((repsOnly ? logged : logged.slice(-COUNTED_SETS)).map((r) => r.id));
@@ -164,6 +183,8 @@ export default function AddEntryDialog({ exercise, person, entries, runType: ini
     try {
       const rows = await api.addEntry(payload);
       onSaved(rows);
+      // A note typed but not saved separately is saved with the sets.
+      if (noteChanged && onSaveNote) await onSaveNote(noteText.trim());
       closeDialog();
     } catch (err) {
       setError(err.message);
@@ -222,11 +243,36 @@ export default function AddEntryDialog({ exercise, person, entries, runType: ini
           />
         </label>
 
+        {note && (
+          <p className="note-reminder">
+            <span className="last-time-label">📝 Your note · {dayLabel(note.updated_at)}</span>
+            {note.note}
+          </p>
+        )}
+
         {lastSummary && (
           <p className="last-time">
             <span className="last-time-label">Last time · {dayLabel(last.date)}</span>
             {lastSummary}
           </p>
+        )}
+
+        {history.length > 0 && (
+          <div className="history">
+            <button type="button" className="text-btn" aria-expanded={showHistory} onClick={() => setShowHistory((v) => !v)}>
+              {showHistory ? 'Hide history' : `Show all history (${history.length} ${history.length === 1 ? 'day' : 'days'})`}
+            </button>
+            {showHistory && (
+              <ol className="history-list">
+                {history.map((h) => (
+                  <li key={h.date}>
+                    <span className="history-date">{dayLabel(h.date)}</span>
+                    <span>{dayText(h.rows)}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
         )}
 
         {hasEquipment && (
@@ -455,6 +501,30 @@ export default function AddEntryDialog({ exercise, person, entries, runType: ini
               ))}
             </ul>
           </section>
+        )}
+
+        {onSaveNote && (
+          <div className="field note-field">
+            <label htmlFor="note-next-time">Note for next time</label>
+            <textarea
+              id="note-next-time"
+              rows={2}
+              maxLength={300}
+              placeholder="e.g. Try 65kg, or felt easy"
+              value={noteText}
+              onChange={(e) => {
+                setNoteText(e.target.value);
+                setNoteState('');
+              }}
+            />
+            <div className="note-actions">
+              <button type="button" className="text-btn" disabled={!noteChanged || noteState === 'saving'} onClick={saveNote}>
+                {noteText.trim() || !note ? 'Save note' : 'Remove note'}
+              </button>
+              {noteState === 'saved' && <span className="hint">Saved. You will see it next time.</span>}
+              {noteChanged && noteState !== 'saved' && <span className="hint">Also saved when you save your sets.</span>}
+            </div>
+          </div>
         )}
 
         {error && (

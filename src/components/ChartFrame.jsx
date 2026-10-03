@@ -4,9 +4,22 @@ const GAP = 24; // space kept between the expanded chart and the edge of the win
 
 // The expanded chart is as wide as the board's four columns of tiles (never wider than the
 // window allows), and its height keeps the window's proportions, scaled down to match.
+// On a phone held upright it is drawn turned 90° instead, filling the screen, so it reads
+// sideways when the phone is turned (websites cannot rotate the screen themselves on iPhone).
 function expandedSize() {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
+  if (vw <= 640 && vh > vw) {
+    const gap = 12;
+    return {
+      width: Math.round(vh - 2 * gap),
+      height: Math.round(vw - 2 * gap),
+      top: '50%',
+      left: '50%',
+      margin: 0,
+      transform: 'translate(-50%, -50%) rotate(90deg)',
+    };
+  }
   const board = document.querySelector('.board');
   let boardWidth = vw;
   if (board) {

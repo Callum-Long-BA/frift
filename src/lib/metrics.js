@@ -168,6 +168,19 @@ export function lastSession(entries, personId, exerciseId, date, runType = null)
   return { date: last, rows };
 }
 
+// Every day a person did an exercise, newest first: [{ date, rows }] with rows in set order.
+export function exerciseHistory(entries, personId, exerciseId) {
+  const byDate = new Map();
+  for (const e of entries) {
+    if (e.person_id !== personId || e.exercise !== exerciseId) continue;
+    if (!byDate.has(e.date)) byDate.set(e.date, []);
+    byDate.get(e.date).push(e);
+  }
+  return [...byDate]
+    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+    .map(([date, rows]) => ({ date, rows: rows.sort((a, b) => a.set_number - b.set_number) }));
+}
+
 // The set number the next logged set will get (matches what the API assigns).
 export function nextSetNumber(entries, personId, exerciseId, date) {
   let highest = 0;
