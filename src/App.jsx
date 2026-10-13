@@ -372,7 +372,6 @@ export default function App() {
           exercises={[...allWeightExercises, ...ccExercises]}
           entries={entries}
           noteFor={noteFor}
-          groupCode={getPasscode()}
           onSwitchGroup={switchGroup}
           status={status}
           error={error}
@@ -418,7 +417,6 @@ export default function App() {
         onEqualiseChange={changeEqualise}
         latestBodyWeight={latestBodyWeight}
         onLogBodyWeight={logBodyWeight}
-        groupCode={getPasscode()}
         onSwitchGroup={switchGroup}
       >
         {status === 'ready' && (

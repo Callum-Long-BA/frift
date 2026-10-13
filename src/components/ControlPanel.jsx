@@ -86,7 +86,6 @@ export default function ControlPanel({
   onEqualiseChange,
   latestBodyWeight,
   onLogBodyWeight,
-  groupCode,
   onSwitchGroup,
   children,
 }) {
@@ -132,13 +131,10 @@ export default function ControlPanel({
           <h1 className="wordmark">
             <em>FRIFT</em>
           </h1>
-          {groupCode && (
-            <p className="group-badge">
-              Group {groupCode}
-              <button type="button" className="text-btn" onClick={onSwitchGroup}>
-                Switch
-              </button>
-            </p>
+          {onSwitchGroup && (
+            <button type="button" className="text-btn change-group" onClick={onSwitchGroup}>
+              Change group
+            </button>
           )}
         </div>
 

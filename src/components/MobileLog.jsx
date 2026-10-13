@@ -29,7 +29,6 @@ export default function MobileLog({
   onLog,
   onFullView,
   noteFor = () => null,
-  groupCode,
   onSwitchGroup,
 }) {
   const today = todayString();
@@ -41,13 +40,10 @@ export default function MobileLog({
         <h1 className="wordmark">
           <em>FRIFT</em>
         </h1>
-        {groupCode && (
-          <p className="group-badge">
-            Group {groupCode}
-            <button type="button" className="text-btn" onClick={onSwitchGroup}>
-              Switch
-            </button>
-          </p>
+        {onSwitchGroup && (
+          <button type="button" className="text-btn change-group" onClick={onSwitchGroup}>
+            Change group
+          </button>
         )}
         <button type="button" className="ghost small" onClick={onFullView}>
           Full view

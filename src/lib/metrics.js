@@ -34,19 +34,27 @@ export function weekGrid(today, weeks = 3) {
 // Someone is inactive if they have logged nothing in this many days (or ever).
 export const INACTIVE_DAYS = 28;
 
-// The order of people in the activity strip: you first, then everyone active in A-Z order,
-// then anyone inactive (nothing logged in the last 4 weeks, or ever), also A-Z.
-// Returns [{ person, inactive }].
+// The order of people in the activity strip: you first, then the most active (most days
+// logged in the last 4 weeks; A-Z breaks ties), then anyone inactive (nothing logged in the
+// last 4 weeks, or ever), A-Z. Returns [{ person, inactive, days }].
 export function activityOrder(people, entries, meId, today) {
   const since = new Date(toTimestamp(today) - INACTIVE_DAYS * DAY_MS).toISOString().slice(0, 10);
-  const recent = new Set(entries.filter((e) => e.date >= since && e.date <= today).map((e) => e.person_id));
+  const daysBy = new Map(); // person id -> Set of dates logged recently
+  for (const e of entries) {
+    if (e.date < since || e.date > today) continue;
+    if (!daysBy.has(e.person_id)) daysBy.set(e.person_id, new Set());
+    daysBy.get(e.person_id).add(e.date);
+  }
   const byName = (a, b) => a.person.name.localeCompare(b.person.name, 'en-GB', { sensitivity: 'base' });
-  const rows = people.map((person) => ({ person, inactive: !recent.has(person.id) }));
+  const rows = people.map((person) => {
+    const days = daysBy.get(person.id)?.size ?? 0;
+    return { person, inactive: days === 0, days };
+  });
   const me = rows.filter((r) => r.person.id === meId);
   const others = rows.filter((r) => r.person.id !== meId);
   return [
     ...me,
-    ...others.filter((r) => !r.inactive).sort(byName),
+    ...others.filter((r) => !r.inactive).sort((a, b) => b.days - a.days || byName(a, b)),
     ...others.filter((r) => r.inactive).sort(byName),
   ];
 }

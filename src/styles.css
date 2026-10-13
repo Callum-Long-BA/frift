@@ -255,7 +255,7 @@ fieldset {
   --rule: #4a525d;
 }
 
-/* The FRIFT title with the group you are in beside it. */
+/* The FRIFT title, with a small link to enter a different group code. */
 .brand-row {
   display: flex;
   align-items: center;
@@ -263,19 +263,10 @@ fieldset {
   gap: 8px;
 }
 
-.group-badge {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--a1-muted);
-  white-space: nowrap;
-}
-
-.group-badge .text-btn {
+.change-group {
   padding: 0;
   font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .control-main {
@@ -789,7 +780,22 @@ fieldset {
   }
 }
 
-/* Nothing logged in 4 weeks: faded, labelled, and at the bottom of the strip. */
+.act-head {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.act-toggle {
+  padding: 0;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* Nothing logged in 4 weeks: faded, labelled, and at the bottom of the strip (hidden until
+   "Show inactive"). */
 .act-name.is-inactive {
   max-width: calc(8ch + 72px);
   opacity: 0.55;

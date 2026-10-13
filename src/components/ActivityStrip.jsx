@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ACTIVITY_WEEKS } from '../lib/constants.js';
 import { activityByPerson, activityOrder, dayLabel, todayString, weekGrid } from '../lib/metrics.js';
 
@@ -25,26 +25,39 @@ export default function ActivityStrip({ people, entries, exercises, me }) {
     [entries, days],
   );
   const exerciseName = useMemo(() => new Map(exercises.map((e) => [e.id, e.name])), [exercises]);
-  // You first, then everyone else A-Z, with anyone inactive for 4 weeks at the bottom.
+  // You first, then the most active, with anyone inactive for 4 weeks at the bottom. Inactive
+  // people (other than you) are hidden until "Show inactive" is pressed.
   const ordered = useMemo(() => activityOrder(people, entries, me?.id, today), [people, entries, me?.id, today]);
+  const [showInactive, setShowInactive] = useState(false);
+  const hiddenCount = ordered.filter((r) => r.inactive && r.person.id !== me?.id).length;
+  const shown = showInactive ? ordered : ordered.filter((r) => !r.inactive || r.person.id === me?.id);
 
   const todayIndex = days.findIndex((d) => d.isToday);
   const firstPersonRow = 3; // row 1 = week dates, row 2 = weekday letters
 
   return (
     <section className="control-section activity" aria-labelledby="activity-title">
-      <h2 id="activity-title" className="section-title">
-        Last {ACTIVITY_WEEKS} weeks
-      </h2>
+      <div className="act-head">
+        <h2 id="activity-title" className="section-title">
+          Last {ACTIVITY_WEEKS} weeks
+        </h2>
+        {hiddenCount > 0 && (
+          <button type="button" className="text-btn act-toggle" aria-pressed={showInactive} onClick={() => setShowInactive((v) => !v)}>
+            {showInactive ? 'Hide inactive' : `Show ${hiddenCount} inactive`}
+          </button>
+        )}
+      </div>
 
       {people.length === 0 ? (
         <p className="chart-empty">No one yet. Add yourself with the menu on the left.</p>
+      ) : shown.length === 0 ? (
+        <p className="chart-empty">No one has logged anything in the last 4 weeks.</p>
       ) : (
         <div
           className="act-grid"
           role="group"
           aria-label={`Days logged in the last ${ACTIVITY_WEEKS} weeks`}
-          style={{ gridTemplateRows: `auto auto repeat(${people.length}, minmax(0, 20px))` }}
+          style={{ gridTemplateRows: `auto auto repeat(${shown.length}, minmax(0, 20px))` }}
         >
           {Array.from({ length: ACTIVITY_WEEKS }, (_, w) => (
             <span key={`w${w}`} className="act-week" style={{ gridColumn: `${columnFor(w * 7)} / span 7`, gridRow: 1 }}>
@@ -64,7 +77,7 @@ export default function ActivityStrip({ people, entries, exercises, me }) {
             </span>
           ))}
 
-          {ordered.map(({ person, inactive }, r) => {
+          {shown.map(({ person, inactive }, r) => {
             const isMe = me?.id === person.id;
             const row = firstPersonRow + r;
             const byDate = activity.get(person.id);
@@ -131,7 +144,7 @@ export default function ActivityStrip({ people, entries, exercises, me }) {
             <span
               className="act-today"
               data-testid="act-today"
-              style={{ gridColumn: columnFor(todayIndex), gridRow: `2 / span ${people.length + 1}` }}
+              style={{ gridColumn: columnFor(todayIndex), gridRow: `2 / span ${shown.length + 1}` }}
               aria-hidden="true"
             />
           )}
