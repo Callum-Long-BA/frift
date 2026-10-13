@@ -12,11 +12,11 @@ export default function PasscodeGate({ onUnlock }) {
     setError('');
     setPasscode(code.trim());
     try {
-      await api.people(); // any authenticated call proves the passcode
+      await api.people(); // any authenticated call proves the code
       onUnlock();
     } catch (err) {
       clearPasscode();
-      setError(err instanceof AuthError ? 'That passcode is not right.' : err.message);
+      setError(err instanceof AuthError ? 'No group has that code.' : err.message);
     } finally {
       setBusy(false);
     }
@@ -29,10 +29,13 @@ export default function PasscodeGate({ onUnlock }) {
           <em>FRIFT</em>
         </h1>
         <label className="dark-field">
-          Group passcode
+          What is your group code?
           <input
-            type="password"
-            autoComplete="current-password"
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            autoCapitalize="off"
+            spellCheck={false}
             value={code}
             onChange={(e) => setCode(e.target.value)}
             required
@@ -44,7 +47,7 @@ export default function PasscodeGate({ onUnlock }) {
           </p>
         )}
         <button type="submit" className="primary" disabled={busy}>
-          {busy ? 'Checking…' : 'Enter'}
+          {busy ? 'Checking…' : 'Enter group'}
         </button>
       </form>
     </main>

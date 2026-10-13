@@ -3,6 +3,7 @@ import { route, isCron, HttpError } from './_http.js';
 import { buildDailyMessages, discordLink, londonNow } from './_discord.js';
 import { PAUSE_MS, postToDiscord, sleep, webhookInfo } from './_webhook.js';
 import { parseDate } from './_validate.js';
+import { findGroupByCode, memberIds } from './_groups.js';
 
 // Posts today's entries to Discord at 8pm UK time: one message per person who logged
 // anything, sent to the channel webhook in DISCORD_WEBHOOK_URL.
@@ -22,6 +23,10 @@ import { parseDate } from './_validate.js';
 
 const POST_HOUR = 20;
 
+// The Discord channel belongs to one group (code 99 unless DISCORD_GROUP_CODE says otherwise):
+// only its members are posted, and only that group can run the post by hand.
+const discordGroupCode = () => process.env.DISCORD_GROUP_CODE || '99';
+
 export default route(
   {
     async GET(req) {
@@ -34,13 +39,20 @@ export default route(
         return { skipped: `It is ${now.hour}:00 in London, not ${POST_HOUR}:00.` };
       }
 
+      const group = await findGroupByCode(discordGroupCode());
+      if (!group) throw new HttpError(500, `There is no group with code ${discordGroupCode()} for the Discord post.`);
+      if (!scheduled && req.group.id !== group.id) throw new HttpError(403, 'The Discord post belongs to another group.');
+
       const webhook = await webhookInfo(url);
       if (!scheduled && req.query?.check) return { webhook };
       const date = !scheduled && req.query?.date ? parseDate(req.query.date) : now.date;
 
       const sql = db();
       const [people, exercises, entries] = await Promise.all([
-        sql`select id, name from people`,
+        sql`select id, name from people`.then(async (all) => {
+          const members = await memberIds(sql, group.id);
+          return all.filter((p) => members.has(p.id));
+        }),
         sql`select id, name, kind from exercises`,
         sql`select id, person_id, exercise, to_char(entry_date, 'YYYY-MM-DD') as date, set_number,
                    weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment,

@@ -1,15 +1,19 @@
 import { db } from './_db.js';
 import { route, HttpError } from './_http.js';
 import { parseId } from './_validate.js';
+import { assertMember, memberIds } from './_groups.js';
 
 const MAX_NOTE = 300;
 
 export default route({
-  // Every note: [{ person_id, exercise_id, note, updated_at }].
-  async GET() {
-    return db()`
+  // Every note by the caller's group: [{ person_id, exercise_id, note, updated_at }].
+  async GET(req) {
+    const sql = db();
+    const members = await memberIds(sql, req.group.id);
+    const rows = await sql`
       select person_id, exercise_id, note, to_char(updated_at, 'YYYY-MM-DD') as updated_at
       from exercise_notes`;
+    return rows.filter((r) => members.has(r.person_id));
   },
 
   // { personId, exerciseId, note }. Replaces that person's note for the exercise; an empty
@@ -20,6 +24,7 @@ export default route({
     const note = String(req.body?.note ?? '').trim();
     if (note.length > MAX_NOTE) throw new HttpError(400, `Notes can be up to ${MAX_NOTE} characters.`);
     const sql = db();
+    await assertMember(sql, req.group.id, personId);
     if (!note) {
       await sql`delete from exercise_notes where person_id = ${personId}::int and exercise_id = ${exerciseId}::text`;
       return { person_id: personId, exercise_id: exerciseId, deleted: true };

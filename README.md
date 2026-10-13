@@ -46,7 +46,7 @@ Live at **https://frift.callumlong.com**.
 - **Equalise.** A checkbox in A1 that counts dumbbell sets at double weight so they can be compared with barbell lifts. Hover or focus "What is this?" beside it for a one-line explanation.
 - **Hover details.** Hover a date on any weight × reps chart to see every person's value for that day and every set they did.
 - **Add exercise.** A tile after the last chart lets anyone add a new exercise (up to 30 in total), logged either as weight × reps or as **reps only** (for bodyweight moves like pull-ups). Weight exercises also pick a **muscle group**. New charts appear for everyone.
-- **Last 3 weeks.** The second section of A1, with nothing to scroll. One row per person, one box per day, for the current week plus the two before it (`ACTIVITY_WEEKS` in `src/lib/constants.js`). Newest first: the current week comes first, each week runs Sunday back to Monday, and each week is labelled with its Monday's date. A filled box in that person's colour means they logged a set or cardio session that day; hovering it names what. Days later in the current week show as dashed, empty boxes. Today's column is outlined all the way down every row. The rows shrink evenly when there are too many people to fit at full size, the boxes stretch to fit the width, and when it is narrow the names shorten to their first three letters (hover for the full name).
+- **Last 3 weeks.** The second section of A1, with nothing to scroll. One row per person, one box per day, for the current week plus the two before it (`ACTIVITY_WEEKS` in `src/lib/constants.js`). Newest first: the current week comes first, each week runs Sunday back to Monday, and each week is labelled with its Monday's date. A filled box in that person's colour means they logged a set or cardio session that day; hovering it names what. Days later in the current week show as dashed, empty boxes. Today's column is outlined all the way down every row. Rows are ordered: you (whoever is chosen in "Who are you?") first, then everyone else A-Z, then, at the bottom, anyone with nothing logged in the last 4 weeks (or ever), faded and marked **inactive**. The rows shrink evenly when there are too many people to fit at full size, the boxes stretch to fit the width, and when it is narrow the names shorten to their first three letters (hover for the full name).
 - **Activity log.** The third section of A1: the 5 most recent sessions (one person, one day) by the date they were for, newest first, with what was done: if the day's exercises closely match one of that person's own routines (at least half in common), the routine's name (e.g. **Push Day**, plus any extra exercises: "Push Day + Leg extension"), otherwise the exercises. Reps-only exercises show the day's total reps (e.g. "Pull ups 24 reps"). A session logged late, or backdated, appears by its date rather than when it was entered. The line below says how many PRs that session set, with a 🏆 and the exercise names. A PR means the session's best beat every earlier session of that exercise by that person: the heaviest weight for weight × reps (barbell and dumbbell counted separately), the most **total reps in a day** for reps-only (10 + 8 + 6 = 24), and the longest time for cardio. The first ever session of an exercise sets a baseline rather than a PR.
 - **Daily sheet sync.** At 6pm UK time, FRIFT copies new sets from Kenneth's and Kyle's own Google Sheets. See [Daily sheet sync](#daily-sheet-sync).
 - **Daily Discord post.** At 8pm UK time, FRIFT posts to the group's Discord channel: one message per person who logged anything that day, listing their exercises and showing the sets of any PR with a 🏆. See [Daily Discord post](#daily-discord-post).
@@ -59,7 +59,7 @@ Live at **https://frift.callumlong.com**.
 - **Home-screen icon.** Adding the site to an iPhone home screen uses a red icon with an italic dark grey "F" (`public/apple-touch-icon.png`). An icon added before this keeps the old picture: remove it and add it again.
 - **Last time.** When you log a weight or reps-only exercise, the dialog shows what you did last time (your most recent earlier day), and each set row shows that day's same-numbered set, with its numbers as the hints in the empty boxes. Cardio and runs (of the same type) show the last session.
 - **Muscle group filters.** Buttons beside the Weight training heading (**All · Chest · Back · Shoulders · Biceps · Triceps · Legs**) show only that group's charts. Under **All**, the charts are grouped the same way (Chest first, then Back, Shoulders, Biceps, Triceps, Legs, then any without a group), each group in the order its exercises were added. Only groups with exercises get a button, plus **Other** for any exercise without a group. Your choice is remembered in your browser.
-- **Shared passcode.** Everyone types one group passcode to get in.
+- **Groups.** Several groups of friends can use FRIFT, each with its own **group code**. The first screen asks for it, and the code decides which group you are in: you only see that group's people and what they logged. The group is shown beside the FRIFT title, with **Switch** to enter another code. People added in a group belong to it (names only need to be unique within a group). Anyone marked as in every group (Callum) appears in all of them, and since everything a person logs belongs to them, Callum's sets, routines, notes and body weight show in every group from a single entry. Exercises are one shared list. The 8pm Discord post and the sheet sync belong to group 99. Groups to start with: **99** (everyone from before groups) and **25** (empty apart from Callum).
 
 Starting exercises: Bench press, Lat pull down, Squat, Leg extension, Shoulder press, Incline dumbbell curl, Cardio.
 
@@ -127,7 +127,7 @@ flowchart LR
 
 1. The browser loads `https://frift.callumlong.com`. Cloudflare DNS resolves it to Vercel, which serves the built React app.
 2. The app asks for the passcode (or uses the one saved in the browser) and calls `/api/people`, `/api/exercises` and `/api/entries` in parallel.
-3. Each function checks the `x-frift-passcode` header against `FRIFT_PASSCODE`, then queries Neon using the `DATABASE_URL` connection string.
+3. Each function looks up the `x-frift-passcode` header (the group code) in the `groups` table, limits everything to that group's members, then queries Neon using the `DATABASE_URL` connection string.
 4. The browser builds the charts from the returned data. Saving a set is a `POST` to `/api/entries`, and the page updates from the response.
 
 ### Notes on each piece
@@ -147,7 +147,7 @@ Set in Vercel: project > Settings > Environment Variables.
 | Name | Required | What it is |
 |---|---|---|
 | `DATABASE_URL` | Yes | Neon connection string, including the password. Treat as a secret. |
-| `FRIFT_PASSCODE` | Yes | The shared group passcode. Treat as a secret. |
+| `DISCORD_GROUP_CODE` | No | The group whose members the 8pm Discord post covers, and who can run it by hand. Defaults to `99`. |
 | `POSTGRES_URL` | No | Older name for the database URL. Used only if `DATABASE_URL` is missing. |
 | `KENNETH_SHEET_ID`, `KYLE_SHEET_ID` | For the sheet sync | The id of each person's Google Sheet: the long part of its address between `/d/` and `/edit`. Kept out of the code because anyone with a sheet's address can read it. |
 | `DISCORD_WEBHOOK_URL` | For the Discord post | The #fitness channel's webhook URL. Anyone with it can post in that channel, so treat it as a secret. |
@@ -227,7 +227,7 @@ Defined in `schema.sql`. The script is **idempotent**: safe to run again on a li
 
 All endpoints live under `/api`, take and return JSON, and are never cached.
 
-**Authentication:** every request must send the header `x-frift-passcode: <the group passcode>`. A wrong or missing passcode gets `401`.
+**Authentication:** every request must send the header `x-frift-passcode: <group code>`. A code that matches no group gets `401`. Every endpoint only returns that group's members and their data, and refuses (`403`) to write for someone outside the group.
 
 **Errors** look like `{ "error": "Readable message" }`. Status codes: `400` invalid input, `401` wrong passcode, `404` not found, `405` wrong method, `409` conflict (duplicate or over a limit), `500` server problem (check the Vercel logs).
 
@@ -341,7 +341,7 @@ frift/
 
   | Key | Holds |
   |---|---|
-  | `frift.passcode` | The passcode you entered. A `401` clears it and shows the passcode screen again. |
+  | `frift.passcode` | The group code you entered. A `401` (or **Switch**) clears it and asks for a code again. |
   | `frift.me` | Who you picked in A1. |
   | `frift.mode` | `total`, `pct`, `best` or `bw`. |
   | `frift.equalise` | Whether Equalise is ticked. |
@@ -374,7 +374,7 @@ frift/
 
 2. **Vercel.** Add New > Project > import the `frift` repo. Vercel detects Vite, so leave the defaults and deploy.
 3. **Neon.** Add Neon from the Vercel Marketplace and connect it so `DATABASE_URL` is set. (If the connect step complains that a variable already exists, the connection is already made. Check Settings > Environment Variables instead.) Open the database in Neon, go to the **SQL Editor**, paste in all of `schema.sql` and run it.
-4. **Passcode.** In Vercel, add `FRIFT_PASSCODE` under Settings > Environment Variables, then redeploy.
+4. **Groups.** `schema.sql` creates groups 99 and 25. To add a group, run `insert into groups (code) values ('your-code');` in Neon.
 5. **Domain.** In Vercel, Settings > Domains, add `frift.callumlong.com` and note the `CNAME` target it shows. In Cloudflare, DNS > Records, add a `CNAME` named `frift` with that target, set to **DNS only**. Vercel shows a tick once it verifies (usually within minutes).
 6. Open the site, enter the passcode, choose **Add a new person** in A1, and add yourself.
 
@@ -466,7 +466,13 @@ delete from exercises where id = 'romanian_deadlift';
 delete from people where id = 3;
 ```
 
-**Change the passcode:** edit `FRIFT_PASSCODE` in Vercel and redeploy. Everyone will be asked for the new one next time they open the site.
+**Add a group:** `insert into groups (code) values ('42');` It starts empty apart from Callum; people add themselves after entering the code.
+
+**Change a group's code:** `update groups set code = 'new-code' where code = '25';` Everyone in it is asked for the new code next time they open the site.
+
+**Put someone in another group too:** `insert into group_members (group_id, person_id) select g.id, p.id from groups g, people p where g.code = '25' and p.name = 'Sam';`
+
+**Make someone appear in every group (like Callum):** `update people set all_groups = true where name = 'Sam';`
 
 **Check the database matches what the code expects:**
 
@@ -553,7 +559,7 @@ Each run's result is in Vercel > Logs (search for "Discord post").
 ## Security and limits
 
 - **The passcode is the only lock.** It stops strangers using the app or filling the database. The "who are you" dropdown is **not** a login: anyone with the passcode can log as anyone. That is fine for friends, but do not treat it as security.
-- **Secrets stay on the server.** `DATABASE_URL`, `FRIFT_PASSCODE`, `CRON_SECRET` and `DISCORD_WEBHOOK_URL` are only read by the API functions and are never sent to the browser. In Vercel, mark both as **Sensitive** if the option is offered.
+- **Secrets stay on the server.** `DATABASE_URL`, `CRON_SECRET` and `DISCORD_WEBHOOK_URL` are only read by the API functions and are never sent to the browser. In Vercel, mark both as **Sensitive** if the option is offered.
 - **The browser never talks to the database directly.** Every read and write goes through a function that checks the passcode and validates the input.
 - **The passcode is saved in the browser** so people don't retype it. Anyone using the same browser profile is treated as having it.
 - **Limits:** 10 people, 30 exercises, 10 sets per save, weights in kg.
@@ -565,10 +571,9 @@ Each run's result is in Vercel > Logs (search for "Discord post").
 
 | What you see | Likely cause | What to do |
 |---|---|---|
-| Passcode screen keeps coming back | Wrong passcode, or `FRIFT_PASSCODE` was changed | Enter the current one. If it never works, check the variable is spelled exactly `FRIFT_PASSCODE` and that you redeployed after adding it. |
+| Group code screen keeps coming back | No group has that code, or it was changed | Enter the current code. Check it in Neon: `select code from groups;` |
 | Red banner "Could not load the data" | The API or database failed | Vercel > Logs shows the real error. Check `DATABASE_URL`, and that `schema.sql` was run in the **same** Neon project the URL points to. |
 | Error mentions a missing column (`equipment`, `equipment_choice`) | Code deployed before the database update | Run the latest `schema.sql` in Neon, then refresh. No redeploy needed. |
-| "FRIFT_PASSCODE is not set on the server" | Variable missing for that environment | Add it under Settings > Environment Variables for Production, then redeploy. |
 | Page loads but is grey and empty | A front-end crash. Newer versions show a message with the error instead, but an old version may still blank | Press F12, open the Console tab, and copy the red error. Or roll back in Vercel. |
 | One chart says "could not be drawn" | That chart hit a data problem | The rest of the app is fine. The message names the error. |
 | `violates check constraint "entries_equipment_check"` | `equipment` was set to something other than exactly `'barbell'` or `'dumbbell'` | Use lowercase, for example `'dumbbell'`. |

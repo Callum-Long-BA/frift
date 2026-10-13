@@ -17,6 +17,7 @@ import {
   cardioChartData,
   lastSession,
   exerciseHistory,
+  activityOrder,
   bodyWeightOn,
   runningChartData,
   formatDuration,
@@ -651,4 +652,25 @@ test('exerciseHistory: every day a person did an exercise, newest first, sets in
   const h = exerciseHistory(entries, 1, 'bench_press');
   assert.deepEqual(h.map((d) => d.date), ['2026-09-08', '2026-09-01']);
   assert.deepEqual(h[0].rows.map((r) => r.set_number), [1, 2]);
+});
+
+test('activityOrder: you first, then A-Z, with anyone inactive for 4 weeks (or ever) at the bottom', () => {
+  const people = [
+    { id: 1, name: 'Zed' }, { id: 2, name: 'amy' }, { id: 3, name: 'Callum' }, { id: 4, name: 'Bob' }, { id: 5, name: 'Dan' },
+  ];
+  const entries = [
+    set(1, '2026-10-10', 1, 60, 8),
+    set(2, '2026-09-20', 1, 60, 8), // 23 days before 13 Oct: active
+    set(4, '2026-09-01', 1, 60, 8), // 42 days: inactive
+    // Callum and Dan: never logged
+  ];
+  const order = activityOrder(people, entries, 3, '2026-10-13');
+  assert.deepEqual(order.map((r) => [r.person.name, r.inactive]), [
+    ['Callum', true], // you are always first, even if inactive
+    ['amy', false],
+    ['Zed', false],
+    ['Bob', true],
+    ['Dan', true],
+  ]);
+  assert.deepEqual(activityOrder(people, entries, null, '2026-10-13').map((r) => r.person.name), ['amy', 'Zed', 'Bob', 'Callum', 'Dan']);
 });

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { ACTIVITY_WEEKS } from '../lib/constants.js';
-import { activityByPerson, dayLabel, todayString, weekGrid } from '../lib/metrics.js';
+import { activityByPerson, activityOrder, dayLabel, todayString, weekGrid } from '../lib/metrics.js';
 
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
@@ -25,6 +25,8 @@ export default function ActivityStrip({ people, entries, exercises, me }) {
     [entries, days],
   );
   const exerciseName = useMemo(() => new Map(exercises.map((e) => [e.id, e.name])), [exercises]);
+  // You first, then everyone else A-Z, with anyone inactive for 4 weeks at the bottom.
+  const ordered = useMemo(() => activityOrder(people, entries, me?.id, today), [people, entries, me?.id, today]);
 
   const todayIndex = days.findIndex((d) => d.isToday);
   const firstPersonRow = 3; // row 1 = week dates, row 2 = weekday letters
@@ -62,13 +64,18 @@ export default function ActivityStrip({ people, entries, exercises, me }) {
             </span>
           ))}
 
-          {people.map((person, r) => {
+          {ordered.map(({ person, inactive }, r) => {
             const isMe = me?.id === person.id;
             const row = firstPersonRow + r;
             const byDate = activity.get(person.id);
             const loggedCount = days.filter((d) => byDate?.has(d.date)).length;
             return [
-              <span key={`n${person.id}`} className={isMe ? 'act-name is-me' : 'act-name'} style={{ gridColumn: 1, gridRow: row }} title={person.name}>
+              <span
+                key={`n${person.id}`}
+                className={`act-name${isMe ? ' is-me' : ''}${inactive ? ' is-inactive' : ''}`}
+                style={{ gridColumn: 1, gridRow: row }}
+                title={inactive ? `${person.name}: inactive, nothing logged in 4 weeks` : person.name}
+              >
                 <span className="swatch" style={{ background: person.colour }} aria-hidden="true" />
                 <span className="act-name-full" aria-hidden="true">
                   {person.name}
@@ -76,9 +83,15 @@ export default function ActivityStrip({ people, entries, exercises, me }) {
                 <span className="act-name-short" aria-hidden="true">
                   {person.name.slice(0, 3)}
                 </span>
+                {inactive && (
+                  <span className="act-inactive" aria-hidden="true">
+                    inactive
+                  </span>
+                )}
                 <span className="sr-only">
                   {person.name}
                   {isMe && ' (you)'}
+                  {inactive && ', inactive'}
                   {' '}
                   logged on {loggedCount} of the last {days.filter((d) => !d.isFuture).length} days.
                 </span>

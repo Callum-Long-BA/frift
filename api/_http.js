@@ -21,24 +21,31 @@ export function isCron(req) {
   return Boolean(secret) && sameSecret(req.headers.authorization, `Bearer ${secret}`);
 }
 
-// Everyone in the group shares one passcode. It keeps strangers out of the
-// database; it is not per-person security.
-export function requirePasscode(req) {
-  const expected = process.env.FRIFT_PASSCODE;
-  if (!expected) throw new HttpError(500, 'FRIFT_PASSCODE is not set on the server.');
-  if (!sameSecret(req.headers['x-frift-passcode'], expected)) {
-    throw new HttpError(401, 'Wrong passcode.');
-  }
+// How a group code is looked up. The real lookup reads the groups table (api/_groups.js,
+// loaded only when needed); tests swap in their own with setGroupFinder.
+let findGroup = async (code) => (await import('./_groups.js')).findGroupByCode(code);
+export function setGroupFinder(fn) {
+  findGroup = fn;
 }
 
-// Wraps { GET, POST, DELETE } handlers with passcode checking, method routing
-// and consistent JSON errors. With { allowCron: true }, Vercel's scheduled calls
-// are let in by CRON_SECRET instead of the passcode.
+// Each group has a code that everyone in it shares (sent as x-frift-passcode). It keeps
+// strangers out and decides whose data you see; it is not per-person security. Returns the
+// group ({ id, code }) or throws 401.
+export async function requireGroup(req) {
+  const group = await findGroup(req.headers['x-frift-passcode']);
+  if (!group) throw new HttpError(401, 'Wrong group code.');
+  return group;
+}
+
+// Wraps { GET, POST, DELETE } handlers with group code checking, method routing and
+// consistent JSON errors. The caller's group is passed on as req.group. With
+// { allowCron: true }, Vercel's scheduled calls are let in by CRON_SECRET instead (and
+// req.group is null).
 export function route(handlers, { allowCron = false } = {}) {
   return async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store');
     try {
-      if (!(allowCron && isCron(req))) requirePasscode(req);
+      req.group = allowCron && isCron(req) ? null : await requireGroup(req);
       const run = handlers[req.method];
       if (!run) {
         res.setHeader('Allow', Object.keys(handlers).join(', '));

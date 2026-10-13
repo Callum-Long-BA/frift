@@ -255,6 +255,29 @@ fieldset {
   --rule: #4a525d;
 }
 
+/* The FRIFT title with the group you are in beside it. */
+.brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.group-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--a1-muted);
+  white-space: nowrap;
+}
+
+.group-badge .text-btn {
+  padding: 0;
+  font-size: 0.8rem;
+}
+
 .control-main {
   display: flex;
   flex-direction: column;
@@ -763,6 +786,30 @@ fieldset {
   .act-name {
     padding-right: 4px;
     font-size: 0.78rem;
+  }
+}
+
+/* Nothing logged in 4 weeks: faded, labelled, and at the bottom of the strip. */
+.act-name.is-inactive {
+  max-width: calc(8ch + 72px);
+  opacity: 0.55;
+  font-style: italic;
+}
+
+.act-inactive {
+  flex: none;
+  padding: 0 4px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-style: normal;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+@container activity (max-width: 340px) {
+  .act-inactive {
+    display: none;
   }
 }
 

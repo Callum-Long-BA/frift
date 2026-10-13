@@ -1,6 +1,7 @@
 import { db } from './_db.js';
 import { route, HttpError } from './_http.js';
 import { parseExerciseName, parseId, slugify } from './_validate.js';
+import { assertMember } from './_groups.js';
 import { ADDABLE_KINDS, MAX_EXERCISES, MUSCLE_GROUPS } from '../src/lib/constants.js';
 
 export default route({
@@ -33,6 +34,7 @@ export default route({
       if (!MUSCLE_GROUPS.some((g) => g.key === muscleGroup)) throw new HttpError(400, 'Choose a muscle group.');
     }
     const sql = db();
+    if (createdBy !== null) await assertMember(sql, req.group.id, createdBy);
 
     try {
       // The cap is checked inside the insert, so two people adding at once cannot both squeeze past it.

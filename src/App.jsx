@@ -131,6 +131,17 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [unlocked, load]);
 
+  // Leave this group: forget its code and ask for one again.
+  function switchGroup() {
+    clearPasscode();
+    setPeople([]);
+    setEntries([]);
+    setRoutines([]);
+    setNotes([]);
+    setBodyWeights([]);
+    setUnlocked(false);
+  }
+
   function selectPerson(id) {
     setMeId(id);
     writeStored(ME_KEY, id ? String(id) : '');
@@ -361,6 +372,8 @@ export default function App() {
           exercises={[...allWeightExercises, ...ccExercises]}
           entries={entries}
           noteFor={noteFor}
+          groupCode={getPasscode()}
+          onSwitchGroup={switchGroup}
           status={status}
           error={error}
           onRetry={() => load()}
@@ -405,6 +418,8 @@ export default function App() {
         onEqualiseChange={changeEqualise}
         latestBodyWeight={latestBodyWeight}
         onLogBodyWeight={logBodyWeight}
+        groupCode={getPasscode()}
+        onSwitchGroup={switchGroup}
       >
         {status === 'ready' && (
           <>
