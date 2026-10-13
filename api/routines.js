@@ -1,6 +1,7 @@
 import { db } from './_db.js';
 import { route, HttpError } from './_http.js';
 import { MAX_ROUTINES_PER_PERSON, copyName, parseId, parseRoutine } from './_validate.js';
+import { assertMember, memberIds } from './_groups.js';
 
 // Every routine with its exercise ids: [{ id, person_id, name, exercise_ids }].
 async function allRoutines(sql, where = null) {
@@ -34,8 +35,11 @@ function translate(err) {
 }
 
 export default route({
-  async GET() {
-    return allRoutines(db());
+  // Routines of everyone in the caller's group.
+  async GET(req) {
+    const sql = db();
+    const members = await memberIds(sql, req.group.id);
+    return allRoutines(sql, (r) => members.has(r.person_id));
   },
 
   // Create: { personId, name, exerciseIds }.
@@ -47,8 +51,10 @@ export default route({
       if (req.body?.copyFrom !== undefined) {
         const fromId = parseId(req.body.copyFrom, 'Routine');
         const toPersonId = parseId(req.body.toPersonId, 'Person');
+        await assertMember(sql, req.group.id, toPersonId);
         const [source] = await allRoutines(sql, (r) => r.id === fromId);
         if (!source) throw new HttpError(404, 'That routine no longer exists.');
+        await assertMember(sql, req.group.id, source.person_id);
         const [owner] = await sql`select name from people where id = ${source.person_id}::int`;
         const theirs = await sql`select name from routines where person_id = ${toPersonId}::int`;
         if (theirs.length >= MAX_ROUTINES_PER_PERSON) throw new HttpError(409, `They already have ${MAX_ROUTINES_PER_PERSON} routines.`);
@@ -59,6 +65,7 @@ export default route({
       }
 
       const personId = parseId(req.body?.personId, 'Person');
+      await assertMember(sql, req.group.id, personId);
       const { name, exerciseIds } = parseRoutine(req.body, await exerciseIdSet(sql));
       const [{ count }] = await sql`select count(*)::int as count from routines where person_id = ${personId}::int`;
       if (count >= MAX_ROUTINES_PER_PERSON) throw new HttpError(409, `You can have up to ${MAX_ROUTINES_PER_PERSON} routines.`);
@@ -76,6 +83,7 @@ export default route({
     try {
       const id = parseId(req.body?.id, 'Routine');
       const personId = parseId(req.body?.personId, 'Person');
+      await assertMember(sql, req.group.id, personId);
       const { name, exerciseIds } = parseRoutine(req.body, await exerciseIdSet(sql));
       const rows = await sql`
         update routines set name = ${name}::text
@@ -93,6 +101,7 @@ export default route({
   async DELETE(req) {
     const id = parseId(req.query?.id, 'Routine');
     const personId = parseId(req.query?.personId, 'Person');
+    await assertMember(db(), req.group.id, personId);
     const rows = await db()`delete from routines where id = ${id}::int and person_id = ${personId}::int returning id`;
     if (rows.length === 0) throw new HttpError(404, 'That routine no longer exists.');
     return { id };

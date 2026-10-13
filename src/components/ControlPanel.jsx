@@ -86,6 +86,7 @@ export default function ControlPanel({
   onEqualiseChange,
   latestBodyWeight,
   onLogBodyWeight,
+  onSwitchGroup,
   children,
 }) {
   const [adding, setAdding] = useState(false);
@@ -126,9 +127,16 @@ export default function ControlPanel({
   return (
     <section className="panel control" aria-label="Who you are, how charts are shown, and recent activity">
       <div className="control-main">
-        <h1 className="wordmark">
-          <em>FRIFT</em>
-        </h1>
+        <div className="brand-row">
+          <h1 className="wordmark">
+            <em>FRIFT</em>
+          </h1>
+          {onSwitchGroup && (
+            <button type="button" className="text-btn change-group" onClick={onSwitchGroup}>
+              Change group
+            </button>
+          )}
+        </div>
 
         <div className="control-group">
           <label className="dark-field" htmlFor="who">

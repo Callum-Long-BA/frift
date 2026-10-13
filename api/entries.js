@@ -1,6 +1,7 @@
 import { db } from './_db.js';
 import { route, HttpError } from './_http.js';
 import { parseNewEntry, parseId } from './_validate.js';
+import { assertMember, memberIds } from './_groups.js';
 
 function translateDbError(err, entry) {
   if (err?.code === '23505') {
@@ -16,10 +17,12 @@ function translateDbError(err, entry) {
 }
 
 export default route({
-  // Everything, oldest first. The group is tiny, so the browser does the charting maths.
-  async GET() {
+  // Everything logged by the caller's group, oldest first. Groups are tiny, so the browser
+  // does the charting maths.
+  async GET(req) {
     const sql = db();
-    return await sql`
+    const members = await memberIds(sql, req.group.id);
+    const rows = await sql`
       select id, person_id, exercise,
              to_char(entry_date, 'YYYY-MM-DD') as date,
              set_number,
@@ -34,6 +37,7 @@ export default route({
              incline_pct::float8 as incline_pct
       from entries
       order by entry_date, set_number, id`;
+    return rows.filter((r) => members.has(r.person_id));
   },
 
   // Strength: { personId, exercise, date, equipment?, sets: [{ weight, reps }] }
@@ -47,6 +51,7 @@ export default route({
     const sql = db();
     const exercises = await sql`select id, kind, equipment_choice from exercises`;
     const entry = parseNewEntry(req.body, exercises);
+    await assertMember(sql, req.group.id, entry.personId);
     try {
       if (entry.kind === 'cardio') {
         return await sql`
@@ -117,6 +122,7 @@ export default route({
     const id = parseId(req.query?.id, 'Entry');
     const personId = parseId(req.query?.personId, 'Person');
     const sql = db();
+    await assertMember(sql, req.group.id, personId);
     const rows = await sql`
       delete from entries where id = ${id}::int and person_id = ${personId}::int
       returning id`;

@@ -255,6 +255,20 @@ fieldset {
   --rule: #4a525d;
 }
 
+/* The FRIFT title, with a small link to enter a different group code. */
+.brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.change-group {
+  padding: 0;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
 .control-main {
   display: flex;
   flex-direction: column;
@@ -763,6 +777,45 @@ fieldset {
   .act-name {
     padding-right: 4px;
     font-size: 0.78rem;
+  }
+}
+
+.act-head {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.act-toggle {
+  padding: 0;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* Nothing logged in 4 weeks: faded, labelled, and at the bottom of the strip (hidden until
+   "Show inactive"). */
+.act-name.is-inactive {
+  max-width: calc(8ch + 72px);
+  opacity: 0.55;
+  font-style: italic;
+}
+
+.act-inactive {
+  flex: none;
+  padding: 0 4px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-style: normal;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+@container activity (max-width: 340px) {
+  .act-inactive {
+    display: none;
   }
 }
 

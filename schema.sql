@@ -209,3 +209,33 @@ create table if not exists exercise_notes (
   updated_at  timestamptz not null default now(),
   primary key (person_id, exercise_id)
 );
+
+-- Groups. Each has a code that its members type to get in. People belong to the groups they
+-- joined (group_members); anyone with people.all_groups (Callum) is in every group. Everything
+-- a person logs belongs to them, so it shows in every group they are in. Exercises are shared.
+create table if not exists groups (
+  id         serial primary key,
+  code       text not null unique,
+  created_at timestamptz not null default now()
+);
+insert into groups (code) values ('99'), ('25') on conflict (code) do nothing;
+
+create table if not exists group_members (
+  group_id  int not null references groups(id) on delete cascade,
+  person_id int not null references people(id) on delete cascade,
+  primary key (group_id, person_id)
+);
+
+-- Everyone who existed before groups is in group 99. Only done the first time, so people who
+-- later join another group are not added to 99 by running this file again.
+insert into group_members (group_id, person_id)
+select g.id, p.id from groups g cross join people p
+where g.code = '99' and not exists (select 1 from group_members)
+on conflict do nothing;
+
+alter table people add column if not exists all_groups boolean not null default false;
+update people set all_groups = true where lower(name) = 'callum';
+
+-- Names now only need to be unique within a group (the API checks), so two groups can each
+-- have a "Sam".
+drop index if exists people_name_unique;

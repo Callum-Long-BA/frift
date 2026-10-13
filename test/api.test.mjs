@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { route, HttpError } from '../api/_http.js';
+import { route, HttpError, setGroupFinder } from '../api/_http.js';
 import { copyName, parseBodyWeight, parseDate, parseExerciseName, parseName, parseNewEntry, parseRoutine, slugify } from '../api/_validate.js';
 
-process.env.FRIFT_PASSCODE = 'secret-lift';
+// One pretend group, code 'secret-lift', instead of the groups table.
+setGroupFinder(async (code) => (code === 'secret-lift' ? { id: 1, code } : null));
 
 function fakeRes() {
   return {
@@ -26,9 +27,11 @@ test('rejects missing and wrong passcodes with 401', async () => {
   }
 });
 
-test('accepts the right passcode and returns the handler result', async () => {
+test('accepts the right group code, passes the group on, and returns the handler result', async () => {
   const res = fakeRes();
-  await route({ GET: async () => [1, 2] })(req('GET', 'secret-lift'), res);
+  let seen = null;
+  await route({ GET: async (r) => { seen = r.group; return [1, 2]; } })(req('GET', 'secret-lift'), res);
+  assert.deepEqual(seen, { id: 1, code: 'secret-lift' });
   assert.equal(res.code, 200);
   assert.deepEqual(res.body, [1, 2]);
   assert.equal(res.headers['Cache-Control'], 'no-store');

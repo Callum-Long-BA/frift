@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildDailyMessages, discordLink, escapeMarkdown, isWebhookUrl, londonNow, repGain } from '../api/_discord.js';
-import { route } from '../api/_http.js';
+import { route, setGroupFinder } from '../api/_http.js';
 
 test('londonNow follows UK summer and winter time', () => {
   // 19:30 UTC is 20:30 in London in September (BST) but 19:30 in December (GMT).
@@ -101,7 +101,7 @@ function fakeRes() {
 }
 
 test('allowCron lets in the cron secret; other routes and wrong secrets still need the passcode', async () => {
-  process.env.FRIFT_PASSCODE = 'secret-lift';
+  setGroupFinder(async (code) => (code === 'secret-lift' ? { id: 1, code } : null));
   process.env.CRON_SECRET = 'cron-123';
   const ok = async () => ({ ok: true });
   const call = async (handler, headers) => {

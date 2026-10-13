@@ -29,6 +29,7 @@ export default function MobileLog({
   onLog,
   onFullView,
   noteFor = () => null,
+  onSwitchGroup,
 }) {
   const today = todayString();
   const mine = me ? routines.filter((r) => r.person_id === me.id) : [];
@@ -39,6 +40,11 @@ export default function MobileLog({
         <h1 className="wordmark">
           <em>FRIFT</em>
         </h1>
+        {onSwitchGroup && (
+          <button type="button" className="text-btn change-group" onClick={onSwitchGroup}>
+            Change group
+          </button>
+        )}
         <button type="button" className="ghost small" onClick={onFullView}>
           Full view
         </button>
