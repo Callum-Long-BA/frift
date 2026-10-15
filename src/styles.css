@@ -1515,9 +1515,6 @@ fieldset {
   color: var(--text);
 }
 
-.set-row.reps-only {
-  grid-template-columns: 4.2rem minmax(0, 1fr) auto;
-}
 
 /* What you did last time, above the sets, and per set under "Set 1". */
 .last-time {

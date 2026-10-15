@@ -46,6 +46,10 @@ on conflict do nothing;
 insert into exercises (id, name, kind, equipment_choice) values ('running', 'Running', 'running', false)
 on conflict do nothing;
 
+-- Swimming works exactly like Running (easy, tempo and intervals; distance and time), on its own tile.
+insert into exercises (id, name, kind, equipment_choice) values ('swimming', 'Swimming', 'running', false)
+on conflict do nothing;
+
 -- Existing databases already have these rows, so switch the option on for them too.
 update exercises set equipment_choice = true where id in ('bench_press', 'squat', 'shoulder_press');
 
@@ -104,10 +108,10 @@ alter table entries add constraint entries_shape check (
   (exercise = 'cardio' and duration_min is not null and weight is null and reps is null
      and run_type is null and distance_km is null and duration_sec is null)
   or
-  (exercise = 'running' and run_type is not null and distance_km is not null and duration_sec is not null
+  (exercise in ('running', 'swimming') and run_type is not null and distance_km is not null and duration_sec is not null
      and weight is null and reps is null and duration_min is null and speed_kmh is null and incline_pct is null)
   or
-  (exercise not in ('cardio', 'running') and reps is not null and duration_min is null
+  (exercise not in ('cardio', 'running', 'swimming') and reps is not null and duration_min is null
      and run_type is null and distance_km is null and duration_sec is null and speed_kmh is null and incline_pct is null)
 );
 

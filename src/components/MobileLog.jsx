@@ -6,7 +6,7 @@ import { runText } from './RunningChart.jsx';
 function setsText(exercise, rows) {
   if (exercise.kind === 'cardio') return rows.map((r) => cardioText(r.duration_min, r.speed_kmh, r.incline_pct)).join('; ');
   if (exercise.kind === 'running') return rows.map((r) => runText({ distanceKm: r.distance_km, seconds: r.duration_sec })).join(', ');
-  if (exercise.kind === 'reps') return `${rows.map((r) => r.reps).join(', ')} reps`;
+  if (exercise.kind === 'reps') return `${rows.map((r) => (r.weight == null ? r.reps : `${r.weight}×${r.reps}`)).join(', ')} reps`;
   return rows.map((r) => `${r.weight}×${r.reps}${r.equipment === 'dumbbell' ? ' DB' : ''}`).join(', ');
 }
 
