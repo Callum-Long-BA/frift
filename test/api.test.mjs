@@ -168,11 +168,12 @@ test('cardio never carries equipment', () => {
 
 const pullups = { personId: 1, exercise: 'pull_ups', date: '2026-09-19' };
 
-test('reps-only exercises take reps alone and store no weight or equipment', () => {
-  const e = parseNewEntry({ ...pullups, equipment: 'dumbbell', sets: [{ reps: '12' }, { reps: 8, weight: 20 }] }, exercises, now);
+test('reps-only exercises take reps, an optional weight, and no equipment', () => {
+  const e = parseNewEntry({ ...pullups, equipment: 'dumbbell', sets: [{ reps: '12' }, { reps: 8, weight: 20 }, { reps: 6, weight: '' }] }, exercises, now);
   assert.equal(e.kind, 'reps');
   assert.equal(e.equipment, null);
-  assert.deepEqual(e.sets, [{ weight: null, reps: 12 }, { weight: null, reps: 8 }]);
+  assert.deepEqual(e.sets, [{ weight: null, reps: 12 }, { weight: 20, reps: 8 }, { weight: null, reps: 6 }]);
+  assert.throws(() => parseNewEntry({ ...pullups, sets: [{ reps: 8, weight: 'abc' }] }, exercises, now), HttpError);
 });
 
 test('reps-only exercises still reject bad reps', () => {

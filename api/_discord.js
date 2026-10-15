@@ -52,7 +52,7 @@ function formatSet(row, kind) {
     return row.speed_kmh ? `${base} at ${number(row.speed_kmh)}km/h, ${number(row.incline_pct ?? 0)}% incline` : base;
   }
   if (kind === 'running') return `${number(row.distance_km)}km in ${formatDuration(row.duration_sec)}`;
-  if (kind === 'reps') return `${row.reps} reps`;
+  if (kind === 'reps' && row.weight == null) return `${row.reps} reps`;
   return `${number(row.weight)}kg x ${row.reps}${row.equipment === 'dumbbell' ? ' DB' : ''}`;
 }
 

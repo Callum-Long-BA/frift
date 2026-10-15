@@ -477,15 +477,16 @@ export function matchesTempoDistance(km, key) {
   return Math.abs(km - target) <= target * 0.05;
 }
 
-// Chart rows for the Running tile, for one run type, in the same shape as buildChartData:
+// Chart rows for a running-kind tile (Running or Swimming, picked by exerciseId), for one
+// run type, in the same shape as buildChartData:
 //   easy:      the day's total distance, km.
 //   tempo:     the day's fastest pace (seconds per km), only for runs matching tempoDistance.
 //   intervals: the day's average pace across every interval: total time / total distance.
 // detail[p<id>] lists that day's runs: [{ setNumber, distanceKm, seconds }].
-export function runningChartData(entries, runType, { tempoDistance = '5k' } = {}) {
+export function runningChartData(entries, runType, { tempoDistance = '5k', exerciseId = 'running' } = {}) {
   const groups = new Map();
   for (const e of entries) {
-    if (e.exercise !== 'running' || e.run_type !== runType) continue;
+    if (e.exercise !== exerciseId || e.run_type !== runType) continue;
     if (runType === 'tempo' && !matchesTempoDistance(e.distance_km, tempoDistance)) continue;
     const key = `${e.person_id}|${e.date}`;
     if (!groups.has(key)) groups.set(key, []);

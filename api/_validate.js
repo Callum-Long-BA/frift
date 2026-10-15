@@ -70,7 +70,7 @@ export function parseDate(value, now = new Date()) {
 // `exercises` is the list from the database: [{ id, kind, equipment_choice }].
 // Returns a normalised entry:
 //   { kind: 'strength', personId, exercise, date, equipment, sets: [{ weight, reps }] }
-//   { kind: 'reps',     personId, exercise, date, equipment: null, sets: [{ weight: null, reps }] }
+//   { kind: 'reps',     personId, exercise, date, equipment: null, sets: [{ weight, reps }] }  (weight null unless added)
 //   { kind: 'cardio',   personId, exercise, date, durationMin, speedKmh, inclinePct }
 //   { kind: 'running',  personId, exercise, date, runType, runs: [{ distanceKm, seconds }] }
 //     (one run for easy and tempo; one per interval for intervals)
@@ -127,7 +127,9 @@ export function parseNewEntry(body, exercises, now = new Date()) {
   const repsOnly = exercise.kind === 'reps';
   const sets = rawSets.map((s, i) => {
     const reps = toNumber(s?.reps);
-    if (repsOnly) {
+    // Reps-only exercises may add a weight (weighted pull-ups); without one it stays empty.
+    const noWeight = repsOnly && (s?.weight === undefined || s?.weight === null || s?.weight === '');
+    if (noWeight) {
       if (!Number.isInteger(reps) || reps < 1 || reps > 200) {
         throw new HttpError(400, `Set ${i + 1}: reps must be a whole number from 1 to 200.`);
       }

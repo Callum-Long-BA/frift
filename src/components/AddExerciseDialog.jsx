@@ -98,7 +98,7 @@ export default function AddExerciseDialog({ person, exercises, onClose, onCreate
             <input type="radio" name="kind" value="reps" checked={repsOnly} onChange={() => setKind('reps')} />
             Reps only
           </label>
-          {repsOnly && <p className="hint">For bodyweight moves like pull-ups or push-ups. No weight is entered.</p>}
+          {repsOnly && <p className="hint">For bodyweight moves like pull-ups or push-ups. Weight is optional, for weighted sets.</p>}
         </fieldset>
 
         {!repsOnly && (

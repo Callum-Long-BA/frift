@@ -72,8 +72,8 @@ export default function RunningChart({ exercise, people, entries, me, loading, o
   });
 
   const { rows, personIds } = useMemo(
-    () => runningChartData(entries, runType, { tempoDistance }),
-    [entries, runType, tempoDistance],
+    () => runningChartData(entries, runType, { tempoDistance, exerciseId: exercise.id }),
+    [entries, runType, tempoDistance, exercise.id],
   );
 
   function changeRunType(next) {
@@ -87,10 +87,11 @@ export default function RunningChart({ exercise, people, entries, me, loading, o
   }
 
   const label = RUN_TYPE_LABELS[runType].toLowerCase();
+  const noun = exercise.id === 'swimming' ? 'swim' : 'run';
   let emptyText;
   if (loading) emptyText = 'Loading…';
-  else if (me) emptyText = `No ${runType === 'tempo' && tempoDistance !== 'all' ? `${TEMPO_DISTANCES.find((d) => d.key === tempoDistance).label} ` : ''}${label} runs yet. Tap + to log one.`;
-  else emptyText = `No ${label} runs yet. Choose who you are to log one.`;
+  else if (me) emptyText = `No ${runType === 'tempo' && tempoDistance !== 'all' ? `${TEMPO_DISTANCES.find((d) => d.key === tempoDistance).label} ` : ''}${label} ${noun}s yet. Tap + to log one.`;
+  else emptyText = `No ${label} ${noun}s yet. Choose who you are to log one.`;
 
   const controls = (
     <>
@@ -129,7 +130,7 @@ export default function RunningChart({ exercise, people, entries, me, loading, o
       title={exercise.name}
       subtitle={subtitleFor(runType, tempoDistance)}
       controls={controls}
-      addLabel={`Log a ${label} run`}
+      addLabel={`Log a ${label} ${noun}`}
       canAdd={Boolean(me)}
       onAdd={() => onAdd(runType)}
     >

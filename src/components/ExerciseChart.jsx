@@ -37,7 +37,7 @@ export function ChartTooltip({ active, payload, label, mode, kind, equalise = fa
                   {sets.map((s, i) => (
                     <span key={s.setNumber} className={s.counts ? 'tip-set is-counted' : 'tip-set'}>
                       {i > 0 && ', '}
-                      {kind === 'reps' ? s.reps : `${s.weight}×${s.reps}`}
+                      {s.weight == null ? s.reps : `${s.weight}×${s.reps}`}
                       {s.equipment === 'dumbbell' && ' DB'}
                     </span>
                   ))}

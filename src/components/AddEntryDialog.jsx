@@ -161,11 +161,13 @@ export default function AddEntryDialog({ exercise, person, entries, note = null,
       for (let i = 0; i < sets.length; i++) {
         const { weight, reps } = sets[i];
         const label = `Set ${firstNewSet + i}`;
-        if (!repsOnly && (weight === '' || Number.isNaN(Number(weight)))) {
+        // Reps-only exercises can leave the weight empty; it is only for weighted sets.
+        const noWeight = repsOnly && weight.trim() === '';
+        if (!noWeight && (weight === '' || Number.isNaN(Number(weight)))) {
           setError(`${label}: enter a weight in kg (minus for assisted).`);
           return;
         }
-        if (!repsOnly && (Number(weight) < MIN_WEIGHT || Number(weight) > MAX_WEIGHT)) {
+        if (!noWeight && (Number(weight) < MIN_WEIGHT || Number(weight) > MAX_WEIGHT)) {
           setError(`${label}: weight must be between ${MIN_WEIGHT} and ${MAX_WEIGHT} kg.`);
           return;
         }
@@ -173,7 +175,7 @@ export default function AddEntryDialog({ exercise, person, entries, note = null,
           setError(`${label}: enter reps as a whole number, 1 or more.`);
           return;
         }
-        parsed.push(repsOnly ? { reps: Number(reps) } : { weight: Number(weight), reps: Number(reps) });
+        parsed.push(noWeight ? { reps: Number(reps) } : { weight: Number(weight), reps: Number(reps) });
       }
       payload = { personId: person.id, exercise: exercise.id, date, sets: parsed };
       if (hasEquipment) payload.equipment = equipment;
@@ -422,29 +424,25 @@ export default function AddEntryDialog({ exercise, person, entries, note = null,
               const n = firstNewSet + i;
               const before = lastSet(n);
               return (
-                <div className={repsOnly ? 'set-row reps-only' : 'set-row'} key={i}>
+                <div className="set-row" key={i}>
                   <span className="set-label">
                     Set {n}
                     {before && <small className="last-hint">last {before.weight === null ? before.reps : `${before.weight}×${before.reps}`}</small>}
                   </span>
-                  {!repsOnly && (
-                    <>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        min={MIN_WEIGHT}
-                        max={MAX_WEIGHT}
-                        step="0.5"
-                        placeholder={before ? String(before.weight) : isDumbbell ? 'kg each' : 'kg'}
-                        aria-label={`Set ${n} weight in kilograms${isDumbbell ? ', per dumbbell' : ''}`}
-                        value={s.weight}
-                        onChange={(e) => updateSet(i, { weight: e.target.value })}
-                      />
-                      <span className="times" aria-hidden="true">
-                        ×
-                      </span>
-                    </>
-                  )}
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={MIN_WEIGHT}
+                    max={MAX_WEIGHT}
+                    step="0.5"
+                    placeholder={before?.weight != null ? String(before.weight) : repsOnly ? '+kg' : isDumbbell ? 'kg each' : 'kg'}
+                    aria-label={`Set ${n} weight in kilograms${repsOnly ? ', optional, for weighted sets' : isDumbbell ? ', per dumbbell' : ''}`}
+                    value={s.weight}
+                    onChange={(e) => updateSet(i, { weight: e.target.value })}
+                  />
+                  <span className="times" aria-hidden="true">
+                    ×
+                  </span>
                   <input
                     type="number"
                     inputMode="numeric"
@@ -472,7 +470,9 @@ export default function AddEntryDialog({ exercise, person, entries, note = null,
               Add another set
             </button>
             <p className="hint">
-              {repsOnly ? 'Every set of the day counts toward the total.' : `Only the last ${COUNTED_SETS} sets of the day count toward the chart.`}
+              {repsOnly
+                ? 'Every set of the day counts toward the total. Weight is optional: fill it in for weighted sets, e.g. 10 for a 10 kg belt.'
+                : `Only the last ${COUNTED_SETS} sets of the day count toward the chart.`}
               {!repsOnly && ' Assisted? Enter the assistance as a minus weight, e.g. -20.'}
             </p>
           </fieldset>
