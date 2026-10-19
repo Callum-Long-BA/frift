@@ -60,6 +60,19 @@ export const TEMPO_DISTANCES = [
 export const MAX_RUN_KM = 200;
 export const MAX_RUN_SECONDS = 24 * 60 * 60;
 
+// Swimming is logged by lengths of the pool rather than a distance typed in directly. Each
+// person's pool length (saved once, used for every swim) must fall in this range, in metres.
+export const MIN_POOL_LENGTH_M = 5;
+export const MAX_POOL_LENGTH_M = 200;
+export const MAX_LENGTHS_PER_SWIM = 1000;
+
+// What the Swimming tile can chart: every swim counts, so it's just a distance/pace toggle
+// rather than Running's easy/tempo/intervals types.
+export const SWIM_VIEWS = [
+  { key: 'distance', label: 'Distance', subtitle: 'Distance per day, km' },
+  { key: 'pace', label: 'Pace', subtitle: 'Average pace per day, per 100m. Faster is higher' },
+];
+
 // Handed out in order as people join. The `light` value is what gets stored against a
 // person in the database; `dark` is the lighter twin actually shown, since the app is dark
 // only (so the old "black" stays visible).

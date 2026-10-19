@@ -8,6 +8,7 @@ import ControlPanel from './components/ControlPanel.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import ExerciseChart from './components/ExerciseChart.jsx';
 import RunningChart from './components/RunningChart.jsx';
+import SwimmingChart from './components/SwimmingChart.jsx';
 import CardioChart from './components/CardioChart.jsx';
 import RoutinesPanel from './components/RoutinesPanel.jsx';
 import RoutineDialog from './components/RoutineDialog.jsx';
@@ -225,6 +226,12 @@ export default function App() {
     ]);
   }
 
+  // Save the chosen person's pool length (metres), used to turn lengths into a distance.
+  async function savePoolLength(poolLengthM) {
+    const saved = await api.updatePoolLength(me.id, poolLengthM);
+    setPeople((prev) => prev.map((p) => (p.id === saved.id ? { ...p, pool_length_m: saved.pool_length_m } : p)));
+  }
+
   function pickRoutine(id) {
     setRoutineId(id);
     writeStored(ROUTINE_KEY, id ? String(id) : '');
@@ -283,6 +290,16 @@ export default function App() {
           loading={status === 'loading'}
           onAdd={() => setDialogExerciseId(exercise.id)}
         />
+      ) : exercise.id === 'swimming' ? (
+        <SwimmingChart
+          exercise={exercise}
+          axisStart={axisStartFor(exercise)}
+          people={themedPeople}
+          entries={entries}
+          me={me}
+          loading={status === 'loading'}
+          onAdd={() => setDialogExerciseId(exercise.id)}
+        />
       ) : exercise.kind === 'running' ? (
         <RunningChart
           exercise={exercise}
@@ -325,6 +342,7 @@ export default function App() {
           entries={entries}
           note={noteFor(dialogExercise.id)}
           onSaveNote={(text) => saveNote(dialogExercise.id, text)}
+          onSavePoolLength={savePoolLength}
           onClose={() => setDialogExerciseId(null)}
           onSaved={(rows) => setEntries((prev) => [...prev, ...rows])}
           onDeleted={(id) => setEntries((prev) => prev.filter((e) => e.id !== id))}

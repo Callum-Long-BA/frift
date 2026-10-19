@@ -38,6 +38,7 @@ async function request(path, { method = 'GET', body } = {}) {
 export const api = {
   people: () => request('people'),
   addPerson: (name) => request('people', { method: 'POST', body: { name } }),
+  updatePoolLength: (personId, poolLengthM) => request('people', { method: 'PUT', body: { personId, poolLengthM } }),
   exercises: () => request('exercises'),
   addExercise: (name, personId, kind, equipmentChoice, muscleGroup) =>
     request('exercises', { method: 'POST', body: { name, personId, kind, equipmentChoice, muscleGroup } }),

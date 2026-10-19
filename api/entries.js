@@ -33,6 +33,7 @@ export default route({
              run_type,
              distance_km::float8 as distance_km,
              duration_sec,
+             lengths,
              speed_kmh::float8 as speed_kmh,
              incline_pct::float8 as incline_pct
       from entries
@@ -47,6 +48,8 @@ export default route({
   // Cardio:   { personId, exercise: 'cardio', date, durationMin, speedKmh, inclinePct }
   // Running:  { personId, exercise: 'running', date, runType, runs: [{ distanceKm, seconds }] }
   //   One run for easy and tempo, one per interval for intervals. Numbered like sets.
+  // Swimming: { personId, exercise: 'swimming', date, runType: 'easy', runs: [{ distanceKm, seconds, lengths }] }
+  //   One swim at a time; lengths is the number of pool lengths that distanceKm came from.
   async POST(req) {
     const sql = db();
     const exercises = await sql`select id, kind, equipment_choice from exercises`;
@@ -61,7 +64,7 @@ export default route({
           returning id, person_id, exercise,
                     to_char(entry_date, 'YYYY-MM-DD') as date,
                     set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment,
-                    run_type, distance_km::float8 as distance_km, duration_sec,
+                    run_type, distance_km::float8 as distance_km, duration_sec, lengths,
                     speed_kmh::float8 as speed_kmh, incline_pct::float8 as incline_pct`;
       }
 
@@ -69,8 +72,9 @@ export default route({
         const numbers = entry.runs.map((_, i) => i + 1);
         const distances = entry.runs.map((r) => r.distanceKm);
         const seconds = entry.runs.map((r) => r.seconds);
+        const lengths = entry.runs.map((r) => r.lengths);
         return await sql`
-          insert into entries (person_id, exercise, entry_date, set_number, run_type, distance_km, duration_sec)
+          insert into entries (person_id, exercise, entry_date, set_number, run_type, distance_km, duration_sec, lengths)
           select ${entry.personId}::int,
                  ${entry.exercise}::text,
                  ${entry.date}::date,
@@ -80,12 +84,13 @@ export default route({
                      and entry_date = ${entry.date}::date) + s.n,
                  ${entry.runType}::text,
                  s.d,
-                 s.t
-          from unnest(${numbers}::int[], ${distances}::numeric[], ${seconds}::int[]) as s(n, d, t)
+                 s.t,
+                 s.l
+          from unnest(${numbers}::int[], ${distances}::numeric[], ${seconds}::int[], ${lengths}::int[]) as s(n, d, t, l)
           returning id, person_id, exercise,
                     to_char(entry_date, 'YYYY-MM-DD') as date,
                     set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment,
-                    run_type, distance_km::float8 as distance_km, duration_sec,
+                    run_type, distance_km::float8 as distance_km, duration_sec, lengths,
                     speed_kmh::float8 as speed_kmh, incline_pct::float8 as incline_pct`;
       }
 
@@ -110,7 +115,7 @@ export default route({
         returning id, person_id, exercise,
                   to_char(entry_date, 'YYYY-MM-DD') as date,
                   set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment,
-                    run_type, distance_km::float8 as distance_km, duration_sec,
+                    run_type, distance_km::float8 as distance_km, duration_sec, lengths,
                     speed_kmh::float8 as speed_kmh, incline_pct::float8 as incline_pct`;
     } catch (err) {
       throw translateDbError(err, entry);
