@@ -527,6 +527,58 @@ export function runningChartData(entries, runType, { tempoDistance = '5k', exerc
   return { rows, personIds: [...perPerson.keys()] };
 }
 
+// ---------- Swimming ----------
+
+// Swimming pace, in seconds per 100 m (swimmers think in 100s, not km like runPace).
+export function swimPace(seconds, km) {
+  return runPace(seconds, km) / 10;
+}
+
+export const formatSwimPace = (secondsPer100m) => `${formatDuration(secondsPer100m)} /100m`;
+
+// Chart rows for the Swimming tile, in the same shape as buildChartData. Swimming has no
+// types to pick between (every swim counts), so there are only two views:
+//   distance: the day's total distance, km (lengths × each person's pool length).
+//   pace:     the day's average pace across every swim: total time / total distance,
+//             seconds per 100m.
+// detail[p<id>] lists that day's swims: [{ setNumber, distanceKm, seconds, lengths }].
+// `lengths` is null for a swim logged before lengths were saved.
+export function swimChartData(entries, view = 'distance') {
+  const groups = new Map();
+  for (const e of entries) {
+    if (e.exercise !== 'swimming') continue;
+    const key = `${e.person_id}|${e.date}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  }
+
+  const perPerson = new Map();
+  const allDates = new Set();
+  for (const [key, swims] of groups) {
+    const [personId, date] = key.split('|');
+    const id = Number(personId);
+    swims.sort((a, b) => a.set_number - b.set_number);
+    const km = swims.reduce((sum, s) => sum + s.distance_km, 0);
+    const seconds = swims.reduce((sum, s) => sum + s.duration_sec, 0);
+    const value = view === 'pace' ? swimPace(seconds, km) : Math.round(km * 100) / 100;
+    const detail = swims.map((s) => ({ setNumber: s.set_number, distanceKm: s.distance_km, seconds: s.duration_sec, lengths: s.lengths ?? null }));
+    if (!perPerson.has(id)) perPerson.set(id, new Map());
+    perPerson.get(id).set(date, { value, detail });
+    allDates.add(date);
+  }
+
+  const rows = [...allDates].sort().map((date) => {
+    const row = { t: toTimestamp(date), date, detail: {} };
+    for (const [personId, byDate] of perPerson) {
+      const point = byDate.get(date);
+      row[seriesKey(personId)] = point ? point.value : null;
+      if (point) row.detail[seriesKey(personId)] = point.detail;
+    }
+    return row;
+  });
+  return { rows, personIds: [...perPerson.keys()] };
+}
+
 // ---------- Cardio ----------
 
 // Km covered in one cardio session (speed x time), or null for older minutes-only entries.
