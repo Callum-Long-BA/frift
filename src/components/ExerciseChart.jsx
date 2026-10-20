@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { COUNTED_SETS } from '../lib/constants.js';
+import { equipmentTag } from '../lib/constants.js';
 import { buildChartData, formatAmount, formatDayLong } from '../lib/metrics.js';
 import ChartFrame from './ChartFrame.jsx';
 import LinesChart from './LinesChart.jsx';
@@ -38,7 +38,7 @@ export function ChartTooltip({ active, payload, label, mode, kind, equalise = fa
                     <span key={s.setNumber} className={s.counts ? 'tip-set is-counted' : 'tip-set'}>
                       {i > 0 && ', '}
                       {s.weight == null ? s.reps : `${s.weight}×${s.reps}`}
-                      {s.equipment === 'dumbbell' && ' DB'}
+                      {equipmentTag(s.equipment)}
                     </span>
                   ))}
                 </p>
@@ -54,29 +54,23 @@ export function ChartTooltip({ active, payload, label, mode, kind, equalise = fa
             : 'DB is dumbbell. Its weight is one dumbbell.'}
         </p>
       )}
-      {anyFaded && (
-        <p className="tip-note">
-          {mode !== 'total'
-            ? 'Bold is the heaviest set of the day. Faded sets are not counted.'
-            : `Faded sets are earlier than the last ${COUNTED_SETS}, so they do not count.`}
-        </p>
-      )}
+      {anyFaded && <p className="tip-note">Bold is the heaviest set of the day. Faded sets are not counted.</p>}
     </div>
   );
 }
 
 function subtitleFor(exercise, mode, equalise) {
-  if (exercise.kind === 'cardio') return mode === 'pct' ? 'Minutes, change since first log' : 'Minutes per day';
+  if (exercise.kind === 'cardio') return mode === 'pct' ? 'Minutes, change since your first recent log' : 'Minutes per day';
   if (exercise.kind === 'reps') {
-    if (mode === 'pct') return 'Best set reps, change since first log';
+    if (mode === 'pct') return 'Best set reps, change since your first recent log';
     if (mode === 'best' || mode === 'bw') return 'Best set of the day, reps';
     return 'Total reps per day';
   }
   let text;
-  if (mode === 'pct') text = 'Best set weight, change since first log';
+  if (mode === 'pct') text = 'Best set weight, change since your first recent log';
   else if (mode === 'best') text = 'Heaviest set of the day, kg';
   else if (mode === 'bw') text = 'Best set ÷ body weight';
-  else text = `Last ${COUNTED_SETS} sets, weight × reps, kg`;
+  else text = 'All sets, weight × reps, kg';
   return equalise && exercise.equipment_choice ? `${text}. Dumbbells doubled.` : text;
 }
 

@@ -2,7 +2,7 @@
 // network or database. The endpoint that sends them is api/daily-discord.js.
 
 import { formatDuration, lastSession, sessionSummary } from '../src/lib/metrics.js';
-import { RUN_TYPES } from '../src/lib/constants.js';
+import { RUN_TYPES, RUN_TYPE_LABELS, equipmentTag } from '../src/lib/constants.js';
 
 // The date ('YYYY-MM-DD') and hour (0-23) in the UK right now, allowing for summer time.
 export function londonNow(now = new Date()) {
@@ -53,7 +53,7 @@ function formatSet(row, kind) {
   }
   if (kind === 'running') return `${number(row.distance_km)}km in ${formatDuration(row.duration_sec)}`;
   if (kind === 'reps' && row.weight == null) return `${row.reps} reps`;
-  return `${number(row.weight)}kg x ${row.reps}${row.equipment === 'dumbbell' ? ' DB' : ''}`;
+  return `${number(row.weight)}kg x ${row.reps}${equipmentTag(row.equipment)}`;
 }
 
 // An exercise in the list: just its name, or for a PR every set in order with the
@@ -64,7 +64,7 @@ function exerciseText(exercise, rows, isPr, prEntryIds) {
   // Running says which kinds of run: "Running (easy, tempo)".
   if (exercise.kind === 'running') {
     const types = RUN_TYPES.filter((t) => rows.some((r) => r.run_type === t));
-    if (types.length > 0) name += ` (${types.join(', ')})`;
+    if (types.length > 0) name += ` (${types.map((t) => RUN_TYPE_LABELS[t].toLowerCase().replace('vo2', 'VO2')).join(', ')})`;
   }
   if (!isPr) return name;
   if (exercise.kind === 'reps') {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { route, HttpError, setGroupFinder } from '../api/_http.js';
-import { copyName, parseBodyWeight, parseDate, parseExerciseName, parseName, parseNewEntry, parseRoutine, slugify } from '../api/_validate.js';
+import { copyName, parseBodyWeight, parseDate, parseExerciseName, parseName, parseNewEntry, parseRoutine, parseVo2max, slugify } from '../api/_validate.js';
 
 // One pretend group, code 'secret-lift', instead of the groups table.
 setGroupFinder(async (code) => (code === 'secret-lift' ? { id: 1, code } : null));
@@ -83,6 +83,8 @@ const exercises = [
   { id: 'cardio', kind: 'cardio', equipment_choice: false },
   { id: 'pull_ups', kind: 'reps', equipment_choice: false },
   { id: 'running', kind: 'running', equipment_choice: false },
+  { id: 'swimming', kind: 'running', equipment_choice: false },
+  { id: 'overhead_extension', kind: 'strength', equipment_choice: true, equipment_options: ['cable', 'dumbbell', 'barbell'] },
 ];
 const base = { personId: 1, exercise: 'bench_press', date: '2026-09-19' };
 
@@ -126,10 +128,18 @@ test('parseNewEntry accepts a user-added exercise once it is in the database lis
 });
 
 test('parseExerciseName trims, collapses spaces, and enforces length', () => {
-  assert.equal(parseExerciseName('  Romanian   deadlift '), 'Romanian deadlift');
+  assert.equal(parseExerciseName('  Romanian   deadlift '), 'Romanian Deadlift');
   assert.throws(() => parseExerciseName('   '), HttpError);
   assert.throws(() => parseExerciseName('x'.repeat(31)), HttpError);
   assert.equal(parseExerciseName('x'.repeat(30)).length, 30);
+});
+
+test('parseExerciseName stores Title Case and singular names', () => {
+  assert.equal(parseExerciseName('lateral raises'), 'Lateral Raise');
+  assert.equal(parseExerciseName('pull ups (assisted)'), 'Pull Up (Assisted)');
+  assert.equal(parseExerciseName('bench press'), 'Bench Press');
+  assert.equal(parseExerciseName('RDL'), 'RDL');
+  assert.equal(parseExerciseName('tricep pull-downs'), 'Tricep Pull-Down');
 });
 
 test('slugify makes safe ids and refuses names with no letters or numbers', () => {
@@ -188,7 +198,31 @@ test('assisted sets: negative weights down to -500 kg are accepted', () => {
   assert.throws(() => parseNewEntry({ ...base, sets: [{ weight: -500.5, reps: 8 }] }, exercises, now), HttpError);
 });
 
+test('weights keep up to 2 decimal places', () => {
+  const e = parseNewEntry({ ...base, sets: [{ weight: '1.25', reps: 10 }, { weight: 2.004, reps: 10 }] }, exercises, now);
+  assert.deepEqual(e.sets.map((s) => s.weight), [1.25, 2]);
+});
+
+test('an exercise with its own equipment list accepts cable, and only its options', () => {
+  const ohe = { personId: 1, exercise: 'overhead_extension', date: '2026-09-19', sets: [{ weight: 20, reps: 12 }] };
+  assert.equal(parseNewEntry({ ...ohe, equipment: 'cable' }, exercises, now).equipment, 'cable');
+  assert.throws(() => parseNewEntry(ohe, exercises, now), /Choose cable, dumbbell or barbell/);
+  assert.throws(() => parseNewEntry({ ...base, exercise: 'squat', equipment: 'cable', sets: [{ weight: 60, reps: 5 }] }, exercises, now), /Choose barbell or dumbbell/);
+});
+
+test('VO2 max scores: 10 to 100, one decimal place kept', () => {
+  assert.deepEqual(parseVo2max({ personId: 1, date: '2026-09-19', value: '48.25' }, now), { personId: 1, date: '2026-09-19', value: 48.3 });
+  for (const value of ['', 9, 101, 'abc']) assert.throws(() => parseVo2max({ personId: 1, date: '2026-09-19', value }, now), HttpError);
+});
+
 const run = { personId: 1, exercise: 'running', date: '2026-09-19' };
+
+test('running: VO2 max sessions and hills take several reps; swimming does not have them', () => {
+  const reps = [{ distanceKm: 0.8, seconds: 200 }, { distanceKm: 0.8, seconds: 198 }];
+  assert.equal(parseNewEntry({ ...run, runType: 'vo2max', runs: reps }, exercises, now).runs.length, 2);
+  assert.equal(parseNewEntry({ ...run, runType: 'hills', runs: reps }, exercises, now).runs.length, 2);
+  assert.throws(() => parseNewEntry({ ...run, exercise: 'swimming', runType: 'hills', runs: reps }, exercises, now), /run type/);
+});
 
 test('running: easy and tempo take one run; intervals take several', () => {
   const easy = parseNewEntry({ ...run, runType: 'easy', runs: [{ distanceKm: '5.234', seconds: 1800 }] }, exercises, now);

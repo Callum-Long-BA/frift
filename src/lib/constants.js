@@ -1,10 +1,6 @@
 // Shared by the browser and the API functions.
 // The exercise list itself now lives in the database (table: exercises).
 
-// Only the last N sets of a day count toward the total, so someone doing
-// 5 sets does not look stronger than someone doing 3.
-export const COUNTED_SETS = 3;
-
 export const MAX_PEOPLE = 10;
 export const MAX_EXERCISES = 40;
 export const MAX_EXERCISE_NAME = 30;
@@ -12,7 +8,22 @@ export const MAX_SETS_PER_ENTRY = 10;
 
 // How a set was lifted, for exercises that allow a choice. Dumbbell weights are
 // entered per dumbbell, so the "Equalise" option doubles them to compare with a barbell.
-export const EQUIPMENT = ['barbell', 'dumbbell'];
+export const EQUIPMENT = ['barbell', 'dumbbell', 'cable'];
+export const EQUIPMENT_LABELS = { barbell: 'Barbell', dumbbell: 'Dumbbell', cable: 'Cable' };
+
+// The equipment one exercise can be logged with, in the order offered: its own list if it
+// has one, else barbell or dumbbell for the older yes/no choice, else none.
+export function equipmentOptions(exercise) {
+  if (exercise?.kind !== 'strength') return [];
+  if (exercise.equipment_options?.length > 1) return exercise.equipment_options;
+  return exercise.equipment_choice ? ['barbell', 'dumbbell'] : [];
+}
+
+// A short tag after a set: "60×8 DB", "20×12 cable". Barbell (or nothing recorded) has none.
+export const equipmentTag = (equipment) => (equipment === 'dumbbell' ? ' DB' : equipment === 'cable' ? ' cable' : '');
+
+// Weights may have up to 2 decimal places (1.25 kg plates).
+export const WEIGHT_STEP = 0.01;
 
 // Kinds of exercise people can add from the app: weight x reps, or reps only (e.g. pull-ups).
 // 'cardio' also exists, but only the built-in Cardio exercise uses it.
@@ -46,9 +57,22 @@ export const MODES = ['total', 'pct', 'best', 'bw'];
 export const MIN_WEIGHT = -500;
 export const MAX_WEIGHT = 1000;
 
-// The Running tile's run types. Easy charts distance; tempo and intervals chart pace.
-export const RUN_TYPES = ['easy', 'tempo', 'intervals'];
-export const RUN_TYPE_LABELS = { easy: 'Easy', tempo: 'Tempo', intervals: 'Intervals' };
+// The Running tile's run types. Easy charts distance; the rest chart pace. VO2 max sessions,
+// hills and intervals are logged as several reps (one row each, rest not included).
+// Swimming only has the first three.
+export const RUN_TYPES = ['easy', 'tempo', 'intervals', 'vo2max', 'hills'];
+export const RUN_TYPE_LABELS = { easy: 'Easy', tempo: 'Tempo', intervals: 'Intervals', vo2max: 'VO2 max session', hills: 'Hills' };
+export const MULTI_RUN_TYPES = ['intervals', 'vo2max', 'hills'];
+export const runTypesFor = (exerciseId) => (exerciseId === 'swimming' ? ['easy', 'tempo', 'intervals'] : RUN_TYPES);
+// What one row of a multi-row run is called: "Interval 2", "Rep 2", "Hill 2".
+export const RUN_ROW_LABELS = { intervals: 'Interval', vo2max: 'Rep', hills: 'Hill' };
+
+// Pace is per km for running, per 100 m for swimming. `km` is the distance one pace covers.
+export const paceUnitFor = (exerciseId) => (exerciseId === 'swimming' ? { km: 0.1, label: '/100m' } : { km: 1, label: '/km' });
+
+// VO2 max scores (ml/kg/min, as a watch estimates it), logged on the Running tile.
+export const MIN_VO2MAX = 10;
+export const MAX_VO2MAX = 100;
 
 // Tempo runs are charted for one distance at a time. A run counts as 5K or 10K if it is
 // within 5% of it; "All" shows every tempo run.

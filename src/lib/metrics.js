@@ -1,4 +1,4 @@
-import { COUNTED_SETS, TEMPO_DISTANCES } from './constants.js';
+import { TEMPO_DISTANCES } from './constants.js';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -233,12 +233,12 @@ const factorFor = (row, equalise) => (equalise && row.equipment === 'dumbbell' ?
 // Map<personId, Map<'YYYY-MM-DD', { value, sets }>>
 //
 // mode 'total' (default):
-//   value = sum of weight x reps over the LAST 3 sets (by set number) of the day.
+//   value = sum of weight x reps over EVERY set of the day.
 // mode 'best':
 //   the best set is the HEAVIEST set that day (doubled for equalised dumbbells), from ALL
 //   sets; if two share the top weight, the one with more reps. value = its weight.
 //
-// Reps-only exercises (kind 'reps') have no weight: 'total' sums the reps of EVERY set that
+// Reps-only exercises (kind 'reps') have no weight: 'total' sums the reps of every set that
 // day and 'best' is the most reps in one set.
 // Cardio is minutes in either mode and has no sets.
 //
@@ -286,12 +286,11 @@ export function dailySummaries(entries, exercise, mode = 'total', { equalise = f
         best.counts = true;
         value = repsOnly ? best.reps : best.weight * best.factor;
       } else {
-        // Reps-only exercises total every set of the day; weights count only the last 3.
-        const counted = repsOnly ? sets : sets.slice(-COUNTED_SETS);
-        counted.forEach((s) => {
+        // Every set of the day counts toward the total.
+        sets.forEach((s) => {
           s.counts = true;
         });
-        value = counted.reduce((sum, s) => sum + volume(s), 0);
+        value = sets.reduce((sum, s) => sum + volume(s), 0);
       }
     }
 
@@ -316,9 +315,24 @@ export function bodyWeightOn(bodyWeights, personId, date) {
   return (before ?? first)?.weight_kg ?? null;
 }
 
+// A gap this long between two of a person's sessions of an exercise starts them afresh for
+// % change: the change is measured from their first session after the latest such gap, so
+// one old session months before they took it up properly does not set the baseline.
+export const PCT_RESTART_DAYS = 120;
+
+// The points (sorted by date) since the person's latest restart (see PCT_RESTART_DAYS).
+export function sinceRecentStart(points, gapDays = PCT_RESTART_DAYS) {
+  let start = 0;
+  for (let i = 1; i < points.length; i++) {
+    if (toTimestamp(points[i].date) - toTimestamp(points[i - 1].date) > gapDays * DAY_MS) start = i;
+  }
+  return points.slice(start);
+}
+
 // mode: 'total' | 'pct' | 'best' | 'bw'.
 //   pct = % change in the best set's weight (as in 'best') from that person's first logged
-//         day. Reps-only exercises use the best set's reps; cardio uses minutes.
+//         day since they last started afresh (see sinceRecentStart); earlier days are left
+//         out. Reps-only exercises use the best set's reps; cardio uses minutes.
 //   bw  = the best set's weight divided by body weight (see bodyWeightOn), e.g. 1.25.
 //         People with no body weight logged are left out. Reps-only and cardio charts have
 //         no weight to divide, so they show the same as 'best'.
@@ -338,9 +352,10 @@ export function buildChartData(entries, exercise, mode, { equalise = false, body
 
     let series = points;
     if (mode === 'pct') {
-      const base = points[0].value;
+      const recent = sinceRecentStart(points);
+      const base = recent[0].value;
       if (!(base > 0)) continue; // change from zero is undefined
-      series = points.map((p) => ({ ...p, value: round1((p.value / base - 1) * 100) }));
+      series = recent.map((p) => ({ ...p, value: round1((p.value / base - 1) * 100) }));
     } else if (mode === 'bw' && exercise.kind === 'strength') {
       series = points
         .map((p) => {
@@ -448,7 +463,7 @@ export function formatAmount(value, mode, kind) {
   if (mode === 'pct') return `${value > 0 ? '+' : ''}${value}%`;
   if (mode === 'bw' && kind === 'strength') return `${value.toFixed(2)}× BW`;
   const unit = kind === 'cardio' ? 'min' : kind === 'reps' ? 'reps' : 'kg';
-  return `${round1(value).toLocaleString('en-GB')} ${unit}`;
+  return `${(Math.round(value * 100) / 100).toLocaleString('en-GB')} ${unit}`;
 }
 
 // ---------- Running ----------
@@ -467,8 +482,8 @@ export function formatDuration(totalSeconds) {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
 
-// A pace in seconds per km as "4:50 /km".
-export const formatPace = (secondsPerKm) => `${formatDuration(secondsPerKm)} /km`;
+// A pace in seconds per unit as "4:50 /km" (or "1:55 /100m" for swimming, see paceUnitFor).
+export const formatPace = (seconds, label = '/km') => `${formatDuration(seconds)} ${label}`;
 
 // Whether a tempo run's distance counts as the chosen 5K or 10K (within 5%). 'all' matches any.
 export function matchesTempoDistance(km, key) {
@@ -481,9 +496,10 @@ export function matchesTempoDistance(km, key) {
 // run type, in the same shape as buildChartData:
 //   easy:      the day's total distance, km.
 //   tempo:     the day's fastest pace (seconds per km), only for runs matching tempoDistance.
-//   intervals: the day's average pace across every interval: total time / total distance.
+//   intervals, vo2max, hills: the day's average pace across every rep: total time / total distance.
+// Pace is seconds per `paceKm` km (1 for running; 0.1, per 100 m, for swimming).
 // detail[p<id>] lists that day's runs: [{ setNumber, distanceKm, seconds }].
-export function runningChartData(entries, runType, { tempoDistance = '5k', exerciseId = 'running' } = {}) {
+export function runningChartData(entries, runType, { tempoDistance = '5k', exerciseId = 'running', paceKm = 1 } = {}) {
   const groups = new Map();
   for (const e of entries) {
     if (e.exercise !== exerciseId || e.run_type !== runType) continue;
@@ -503,11 +519,11 @@ export function runningChartData(entries, runType, { tempoDistance = '5k', exerc
     if (runType === 'easy') {
       value = Math.round(runs.reduce((sum, r) => sum + r.distance_km, 0) * 100) / 100;
     } else if (runType === 'tempo') {
-      value = Math.min(...runs.map((r) => runPace(r.duration_sec, r.distance_km)));
+      value = Math.min(...runs.map((r) => runPace(r.duration_sec, r.distance_km))) * paceKm;
     } else {
       const km = runs.reduce((sum, r) => sum + r.distance_km, 0);
       const seconds = runs.reduce((sum, r) => sum + r.duration_sec, 0);
-      value = runPace(seconds, km);
+      value = runPace(seconds, km) * paceKm;
     }
     const detail = runs.map((r) => ({ setNumber: r.set_number, distanceKm: r.distance_km, seconds: r.duration_sec }));
     if (!perPerson.has(id)) perPerson.set(id, new Map());
@@ -522,6 +538,24 @@ export function runningChartData(entries, runType, { tempoDistance = '5k', exerc
       row[seriesKey(personId)] = point ? point.value : null;
       if (point) row.detail[seriesKey(personId)] = point.detail;
     }
+    return row;
+  });
+  return { rows, personIds: [...perPerson.keys()] };
+}
+
+// Chart rows for VO2 max scores, in the same shape as buildChartData: one value per person per
+// day. `readings` is [{ person_id, date, value }].
+export function vo2maxChartData(readings) {
+  const perPerson = new Map();
+  const allDates = new Set();
+  for (const r of readings) {
+    if (!perPerson.has(r.person_id)) perPerson.set(r.person_id, new Map());
+    perPerson.get(r.person_id).set(r.date, r.value);
+    allDates.add(r.date);
+  }
+  const rows = [...allDates].sort().map((date) => {
+    const row = { t: toTimestamp(date), date, detail: {} };
+    for (const [personId, byDate] of perPerson) row[seriesKey(personId)] = byDate.get(date) ?? null;
     return row;
   });
   return { rows, personIds: [...perPerson.keys()] };

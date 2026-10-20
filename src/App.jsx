@@ -4,6 +4,7 @@ import { MAX_EXERCISES, MODES, MUSCLE_GROUPS } from './lib/constants.js';
 import { readStored, writeStored } from './lib/storage.js';
 import { colourFor } from './lib/theme.js';
 import { todayString } from './lib/metrics.js';
+import { downloadCsv, exportCsv } from './lib/export.js';
 import ControlPanel from './components/ControlPanel.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import ExerciseChart from './components/ExerciseChart.jsx';
@@ -34,6 +35,7 @@ export default function App() {
   const [exercises, setExercises] = useState([]);
   const [entries, setEntries] = useState([]);
   const [bodyWeights, setBodyWeights] = useState([]);
+  const [vo2max, setVo2max] = useState([]); // [{ person_id, date, value }]
   const [status, setStatus] = useState('loading'); // loading | ready | error
   const [error, setError] = useState('');
   const [meId, setMeId] = useState(() => Number(readStored(ME_KEY)) || null);
@@ -76,7 +78,7 @@ export default function App() {
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!quiet) setStatus('loading');
     try {
-      const [nextPeople, nextExercises, nextEntries, nextBodyWeights, nextRoutines, nextNotes] = await Promise.all([
+      const [nextPeople, nextExercises, nextEntries, nextBodyWeights, nextRoutines, nextNotes, nextVo2max] = await Promise.all([
         api.people(),
         api.exercises(),
         api.entries(),
@@ -95,6 +97,11 @@ export default function App() {
           if (err instanceof AuthError) throw err;
           return [];
         }),
+        // Nor VO2 max scores, which only feed one view of the Running tile.
+        api.vo2max().catch((err) => {
+          if (err instanceof AuthError) throw err;
+          return [];
+        }),
       ]);
       setPeople(nextPeople);
       setExercises(nextExercises);
@@ -102,6 +109,7 @@ export default function App() {
       setBodyWeights(nextBodyWeights);
       setRoutines(nextRoutines);
       setNotes(nextNotes);
+      setVo2max(nextVo2max);
       setError('');
       setStatus('ready');
     } catch (err) {
@@ -139,6 +147,7 @@ export default function App() {
     setRoutines([]);
     setNotes([]);
     setBodyWeights([]);
+    setVo2max([]);
     setUnlocked(false);
   }
 
@@ -170,6 +179,23 @@ export default function App() {
       ...prev.filter((b) => !(b.person_id === saved.person_id && b.date === saved.date)),
       saved,
     ]);
+  }
+
+  // One score per person per day, so a new one for the same day replaces the old.
+  async function logVo2max(date, value) {
+    const saved = await api.logVo2max(me.id, date, value);
+    setVo2max((prev) => [...prev.filter((v) => !(v.person_id === saved.person_id && v.date === saved.date)), saved]);
+  }
+
+  async function deleteVo2max(date) {
+    await api.deleteVo2max(me.id, date);
+    setVo2max((prev) => prev.filter((v) => !(v.person_id === me.id && v.date === date)));
+  }
+
+  // Everything the chosen person has logged, as one CSV file.
+  function exportMine() {
+    const csv = exportCsv({ personId: me.id, entries, exercises, bodyWeights, vo2max });
+    downloadCsv(csv, `frift-${me.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${todayString()}.csv`);
   }
 
   if (!unlocked) return <PasscodeGate onUnlock={() => setUnlocked(true)} />;
@@ -289,6 +315,7 @@ export default function App() {
           axisStart={axisStartFor(exercise)}
           people={themedPeople}
           entries={entries}
+          vo2max={vo2max}
           me={me}
           loading={status === 'loading'}
           onAdd={(runType) => {
@@ -323,6 +350,9 @@ export default function App() {
           runType={dialogRunType}
           person={me}
           entries={entries}
+          vo2max={vo2max}
+          onLogVo2max={logVo2max}
+          onDeleteVo2max={deleteVo2max}
           note={noteFor(dialogExercise.id)}
           onSaveNote={(text) => saveNote(dialogExercise.id, text)}
           onClose={() => setDialogExerciseId(null)}
@@ -479,6 +509,14 @@ export default function App() {
         </h2>
         {ccExercises.map(renderChart)}
       </div>
+
+      {status === 'ready' && me && (
+        <footer className="board-foot">
+          <button type="button" className="text-btn quiet-btn" onClick={exportMine}>
+            Export {me.name}&rsquo;s data (CSV)
+          </button>
+        </footer>
+      )}
 
       {dialogs}
     </main>

@@ -23,6 +23,7 @@ import {
   formatDuration,
   formatPace,
   matchesTempoDistance,
+  vo2maxChartData,
 } from '../src/lib/metrics.js';
 
 const bench = { id: 'bench_press', name: 'Bench press', kind: 'strength' };
@@ -40,22 +41,21 @@ const value = (entries, exercise, person, date, mode = 'total') =>
 
 // ---------- total weight ----------
 
-test('only the last 3 sets of the day count', () => {
+test('every set of the day counts toward the total', () => {
   const entries = [
-    set(1, '2026-09-01', 1, 40, 10), // ignored
-    set(1, '2026-09-01', 2, 50, 10), // ignored
+    set(1, '2026-09-01', 1, 40, 10), // 400
+    set(1, '2026-09-01', 2, 50, 10), // 500
     set(1, '2026-09-01', 3, 60, 8),  // 480
     set(1, '2026-09-01', 4, 60, 8),  // 480
     set(1, '2026-09-01', 5, 60, 6),  // 360
   ];
-  assert.equal(value(entries, bench, 1, '2026-09-01'), 480 + 480 + 360);
+  assert.equal(value(entries, bench, 1, '2026-09-01'), 400 + 500 + 480 + 480 + 360);
 });
 
-test('someone doing 5 sets is not ahead of someone doing 3 identical sets', () => {
-  const three = [1, 2, 3].map((n) => set(1, '2026-09-01', n, 60, 8));
-  const five = [1, 2, 3, 4, 5].map((n) => set(2, '2026-09-01', n, 60, 8));
-  const all = [...three, ...five];
-  assert.equal(value(all, bench, 1, '2026-09-01'), value(all, bench, 2, '2026-09-01'));
+test('weights with 2 decimal places total exactly', () => {
+  const entries = [set(1, '2026-09-01', 1, 1.25, 10), set(1, '2026-09-01', 2, 1.25, 8)];
+  assert.equal(value(entries, bench, 1, '2026-09-01'), 22.5);
+  assert.equal(formatAmount(1.25, 'best', 'strength'), '1.25 kg');
 });
 
 test('fewer than 3 sets sums what exists', () => {
@@ -63,14 +63,16 @@ test('fewer than 3 sets sums what exists', () => {
   assert.equal(value(entries, bench, 1, '2026-09-01'), 900);
 });
 
-test('"last" is by set number, not by row order', () => {
+test('sets are listed by set number, not by row order', () => {
   const entries = [
     set(1, '2026-09-01', 4, 60, 8),
     set(1, '2026-09-01', 1, 10, 10),
     set(1, '2026-09-01', 3, 60, 8),
     set(1, '2026-09-01', 2, 60, 8),
   ];
-  assert.equal(value(entries, bench, 1, '2026-09-01'), 60 * 8 * 3);
+  assert.equal(value(entries, bench, 1, '2026-09-01'), 60 * 8 * 3 + 100);
+  const sets = buildChartData(entries, bench, 'total').rows[0].detail[seriesKey(1)];
+  assert.deepEqual(sets.map((s) => s.setNumber), [1, 2, 3, 4]);
 });
 
 test('other exercises and other people do not leak into a chart', () => {
@@ -86,7 +88,7 @@ test('other exercises and other people do not leak into a chart', () => {
 test('a custom exercise charts the same way as the originals', () => {
   const rdl = { id: 'romanian_deadlift', name: 'Romanian deadlift', kind: 'strength' };
   const entries = [1, 2, 3, 4].map((n) => set(1, '2026-09-01', n, 80, 8, 'romanian_deadlift'));
-  assert.equal(value(entries, rdl, 1, '2026-09-01'), 80 * 8 * 3);
+  assert.equal(value(entries, rdl, 1, '2026-09-01'), 80 * 8 * 4);
 });
 
 // ---------- best set ----------
@@ -100,7 +102,7 @@ test('best set plots the weight of the heaviest set', () => {
   assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 70);
 });
 
-test('best set looks at ALL sets of the day, not just the last 3', () => {
+test('best set looks at ALL sets of the day', () => {
   const entries = [
     set(1, '2026-09-01', 1, 80, 10), // heaviest, but early
     set(1, '2026-09-01', 2, 60, 8),
@@ -109,7 +111,7 @@ test('best set looks at ALL sets of the day, not just the last 3', () => {
     set(1, '2026-09-01', 5, 50, 8),
   ];
   assert.equal(value(entries, bench, 1, '2026-09-01', 'best'), 80); // the early 80 x 10 set
-  assert.equal(value(entries, bench, 1, '2026-09-01', 'total'), 480 + 480 + 400);
+  assert.equal(value(entries, bench, 1, '2026-09-01', 'total'), 800 + 480 + 480 + 480 + 400);
 });
 
 test('best set is chosen by weight first: 100 x 3 beats 60 x 8', () => {
@@ -156,10 +158,26 @@ test('each data point carries every set that person did that day, in order', () 
   ]);
 });
 
-test('in total mode the last 3 sets are flagged as counting', () => {
+test('in total mode every set is flagged as counting', () => {
   const entries = [1, 2, 3, 4, 5].map((n) => set(1, '2026-09-01', n, 60, 8));
   const sets = buildChartData(entries, bench, 'total').rows[0].detail[seriesKey(1)];
-  assert.deepEqual(sets.map((s) => s.counts), [false, false, true, true, true]);
+  assert.deepEqual(sets.map((s) => s.counts), [true, true, true, true, true]);
+});
+
+test('% change starts afresh after a break of over 4 months', () => {
+  const entries = [
+    set(1, '2026-01-05', 1, 40, 8), // a one-off, long before
+    set(1, '2026-06-01', 1, 60, 8), // over 4 months later: the new baseline
+    set(1, '2026-06-08', 1, 66, 8),
+  ];
+  const { rows } = buildChartData(entries, bench, 'pct');
+  assert.deepEqual(rows.map((r) => [r.date, r[seriesKey(1)]]), [['2026-06-01', 0], ['2026-06-08', 10]]);
+});
+
+test('% change keeps the first day when breaks are shorter than 4 months', () => {
+  const entries = [set(1, '2026-01-05', 1, 50, 8), set(1, '2026-04-20', 1, 55, 8)];
+  const { rows } = buildChartData(entries, bench, 'pct');
+  assert.deepEqual(rows.map((r) => r[seriesKey(1)]), [0, 10]);
 });
 
 test('in best mode only the best set is flagged as counting', () => {
@@ -518,6 +536,7 @@ test('formatDuration and formatPace', () => {
   assert.equal(formatDuration(95), '1:35');
   assert.equal(formatDuration(3725), '1:02:05');
   assert.equal(formatPace(290), '4:50 /km');
+  assert.equal(formatPace(115, '/100m'), '1:55 /100m');
 });
 
 test('easy runs chart total distance per day', () => {
@@ -541,6 +560,20 @@ test('tempo runs chart the best pace, for the chosen distance only', () => {
   assert.equal(matchesTempoDistance(5.2, '5k'), true); // within 5%
   assert.equal(matchesTempoDistance(4.7, '5k'), false);
   assert.equal(matchesTempoDistance(10.4, '10k'), true);
+});
+
+test('VO2 max sessions and hills chart average pace like intervals; swims per 100 m', () => {
+  const entries = [runRow(1, '2026-09-01', 1, 'vo2max', 0.8, 200), runRow(1, '2026-09-01', 2, 'vo2max', 0.8, 200), runRow(1, '2026-09-02', 1, 'hills', 0.2, 60)];
+  assert.equal(runningChartData(entries, 'vo2max').rows[0][seriesKey(1)], 250);
+  assert.equal(runningChartData(entries, 'hills').rows[0][seriesKey(1)], 300);
+  const swim = [{ ...runRow(1, '2026-09-03', 1, 'easy', 1, 1200), exercise: 'swimming' }, { ...runRow(1, '2026-09-03', 2, 'tempo', 0.4, 400), exercise: 'swimming' }];
+  assert.equal(runningChartData(swim, 'tempo', { exerciseId: 'swimming', tempoDistance: 'all', paceKm: 0.1 }).rows[0][seriesKey(1)], 100);
+});
+
+test('VO2 max scores chart one value per person per day', () => {
+  const { rows, personIds } = vo2maxChartData([{ person_id: 1, date: '2026-09-01', value: 48 }, { person_id: 2, date: '2026-09-03', value: 51.5 }]);
+  assert.deepEqual(personIds, [1, 2]);
+  assert.deepEqual(rows.map((r) => [r.date, r[seriesKey(1)], r[seriesKey(2)]]), [['2026-09-01', 48, null], ['2026-09-03', null, 51.5]]);
 });
 
 test('intervals chart average pace: total time over total distance', () => {
