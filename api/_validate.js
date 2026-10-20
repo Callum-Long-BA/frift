@@ -1,6 +1,8 @@
 import {
   EQUIPMENT_LABELS,
   MAX_EXERCISE_NAME,
+  MAX_LENGTHS_PER_SWIM,
+  MAX_POOL_LENGTH_M,
   MAX_VO2MAX,
   MIN_VO2MAX,
   MULTI_RUN_TYPES,
@@ -9,9 +11,10 @@ import {
   MAX_RUN_SECONDS,
   MAX_SETS_PER_ENTRY,
   MAX_WEIGHT,
+  MIN_POOL_LENGTH_M,
   MIN_WEIGHT,
+  RUN_TYPES,
   equipmentOptions,
-  runTypesFor,
 } from '../src/lib/constants.js';
 import { tidyExerciseName } from '../src/lib/names.js';
 import { HttpError } from './_http.js';
@@ -106,13 +109,19 @@ export function parseNewEntry(body, exercises, now = new Date()) {
   }
 
   if (exercise.kind === 'running') {
-    const runType = body?.runType;
-    if (!runTypesFor(exercise.id).includes(runType)) throw new HttpError(400, 'Choose a run type.');
-    const multi = MULTI_RUN_TYPES.includes(runType);
+    // Swimming has no types to choose between: every swim is stored as 'easy', with the
+    // lengths swum alongside the distance that lengths × pool length works out to.
+    const isSwimming = exercise.id === 'swimming';
+    const runType = isSwimming ? 'easy' : body?.runType;
+    if (!RUN_TYPES.includes(runType)) throw new HttpError(400, 'Choose a run type.');
+    const multi = !isSwimming && MULTI_RUN_TYPES.includes(runType);
     const rawRuns = body?.runs;
     const most = multi ? MAX_SETS_PER_ENTRY : 1;
     if (!Array.isArray(rawRuns) || rawRuns.length < 1 || rawRuns.length > most) {
-      throw new HttpError(400, multi ? `Log between 1 and ${most} reps at a time.` : 'Log one run at a time.');
+      throw new HttpError(
+        400,
+        multi ? `Log between 1 and ${most} reps at a time.` : isSwimming ? 'Log one swim at a time.' : 'Log one run at a time.',
+      );
     }
     const runs = rawRuns.map((r, i) => {
       const label = multi ? `${RUN_ROW_LABELS[runType]} ${i + 1}: ` : '';
@@ -124,7 +133,14 @@ export function parseNewEntry(body, exercises, now = new Date()) {
       if (!Number.isInteger(seconds) || seconds < 1 || seconds > MAX_RUN_SECONDS) {
         throw new HttpError(400, `${label}enter a time of at least 1 second.`);
       }
-      return { distanceKm: Math.round(distanceKm * 100) / 100, seconds };
+      let lengths = null;
+      if (isSwimming) {
+        lengths = toNumber(r?.lengths);
+        if (!Number.isInteger(lengths) || lengths < 1 || lengths > MAX_LENGTHS_PER_SWIM) {
+          throw new HttpError(400, `Lengths must be a whole number from 1 to ${MAX_LENGTHS_PER_SWIM}.`);
+        }
+      }
+      return { distanceKm: Math.round(distanceKm * 100) / 100, seconds, lengths };
     });
     return { kind: 'running', personId, exercise: exercise.id, date, runType, runs };
   }
@@ -167,6 +183,15 @@ export function parseNewEntry(body, exercises, now = new Date()) {
   }
 
   return { kind: repsOnly ? 'reps' : 'strength', personId, exercise: exercise.id, date, equipment, sets };
+}
+
+// A person's pool length, in metres, for turning swum lengths into a distance.
+export function parsePoolLength(value) {
+  const n = toNumber(value);
+  if (!Number.isFinite(n) || n < MIN_POOL_LENGTH_M || n > MAX_POOL_LENGTH_M) {
+    throw new HttpError(400, `Pool length must be between ${MIN_POOL_LENGTH_M} and ${MAX_POOL_LENGTH_M} m.`);
+  }
+  return Math.round(n * 10) / 10;
 }
 
 // { personId, date, weightKg } for a body weight reading. One decimal place is kept.

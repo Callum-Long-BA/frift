@@ -59,16 +59,11 @@ export const MAX_WEIGHT = 1000;
 
 // The Running tile's run types. Easy charts distance; the rest chart pace. VO2 max sessions,
 // hills and intervals are logged as several reps (one row each, rest not included).
-// Swimming only has the first three.
 export const RUN_TYPES = ['easy', 'tempo', 'intervals', 'vo2max', 'hills'];
 export const RUN_TYPE_LABELS = { easy: 'Easy', tempo: 'Tempo', intervals: 'Intervals', vo2max: 'VO2 max session', hills: 'Hills' };
 export const MULTI_RUN_TYPES = ['intervals', 'vo2max', 'hills'];
-export const runTypesFor = (exerciseId) => (exerciseId === 'swimming' ? ['easy', 'tempo', 'intervals'] : RUN_TYPES);
 // What one row of a multi-row run is called: "Interval 2", "Rep 2", "Hill 2".
 export const RUN_ROW_LABELS = { intervals: 'Interval', vo2max: 'Rep', hills: 'Hill' };
-
-// Pace is per km for running, per 100 m for swimming. `km` is the distance one pace covers.
-export const paceUnitFor = (exerciseId) => (exerciseId === 'swimming' ? { km: 0.1, label: '/100m' } : { km: 1, label: '/km' });
 
 // VO2 max scores (ml/kg/min, as a watch estimates it), logged on the Running tile.
 export const MIN_VO2MAX = 10;
@@ -83,6 +78,19 @@ export const TEMPO_DISTANCES = [
 ];
 export const MAX_RUN_KM = 200;
 export const MAX_RUN_SECONDS = 24 * 60 * 60;
+
+// Swimming is logged by lengths of the pool rather than a distance typed in directly. Each
+// person's pool length (saved once, used for every swim) must fall in this range, in metres.
+export const MIN_POOL_LENGTH_M = 5;
+export const MAX_POOL_LENGTH_M = 200;
+export const MAX_LENGTHS_PER_SWIM = 1000;
+
+// What the Swimming tile can chart: every swim counts, so it's just a distance/pace toggle
+// rather than Running's easy/tempo/intervals types.
+export const SWIM_VIEWS = [
+  { key: 'distance', label: 'Distance', subtitle: 'Distance per day, km' },
+  { key: 'pace', label: 'Pace', subtitle: 'Average pace per day, per 100m. Faster is higher' },
+];
 
 // Handed out in order as people join. The `light` value is what gets stored against a
 // person in the database; `dark` is the lighter twin actually shown, since the app is dark

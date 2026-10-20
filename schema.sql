@@ -46,7 +46,8 @@ on conflict do nothing;
 insert into exercises (id, name, kind, equipment_choice) values ('running', 'Running', 'running', false)
 on conflict do nothing;
 
--- Swimming works exactly like Running (easy, tempo and intervals; distance and time), on its own tile.
+-- Swimming shares Running's columns (kind, run_type, distance_km, duration_sec) but is
+-- logged and charted differently; see the pool_length_m / lengths migration below.
 insert into exercises (id, name, kind, equipment_choice) values ('swimming', 'Swimming', 'running', false)
 on conflict do nothing;
 
@@ -243,6 +244,14 @@ update people set all_groups = true where lower(name) = 'callum';
 -- Names now only need to be unique within a group (the API checks), so two groups can each
 -- have a "Sam".
 drop index if exists people_name_unique;
+
+-- Swimming is now logged by lengths of the pool rather than a distance typed in directly.
+-- Each person's pool length is saved so lengths can be converted to a distance; every swim
+-- is stored as run_type 'easy' with the lengths swum alongside the computed distance_km
+-- (null for Running, and for swims logged before this).
+alter table people add column if not exists pool_length_m numeric(5,1)
+  check (pool_length_m is null or pool_length_m between 5 and 200);
+alter table entries add column if not exists lengths int check (lengths is null or lengths between 1 and 1000);
 
 -- Cable as a third kind of equipment. Exercises can list which they offer
 -- (equipment_options); exercises without a list but with equipment_choice offer barbell or

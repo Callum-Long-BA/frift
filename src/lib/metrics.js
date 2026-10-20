@@ -482,8 +482,8 @@ export function formatDuration(totalSeconds) {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
 
-// A pace in seconds per unit as "4:50 /km" (or "1:55 /100m" for swimming, see paceUnitFor).
-export const formatPace = (seconds, label = '/km') => `${formatDuration(seconds)} ${label}`;
+// A pace in seconds per km as "4:50 /km".
+export const formatPace = (secondsPerKm) => `${formatDuration(secondsPerKm)} /km`;
 
 // Whether a tempo run's distance counts as the chosen 5K or 10K (within 5%). 'all' matches any.
 export function matchesTempoDistance(km, key) {
@@ -497,9 +497,8 @@ export function matchesTempoDistance(km, key) {
 //   easy:      the day's total distance, km.
 //   tempo:     the day's fastest pace (seconds per km), only for runs matching tempoDistance.
 //   intervals, vo2max, hills: the day's average pace across every rep: total time / total distance.
-// Pace is seconds per `paceKm` km (1 for running; 0.1, per 100 m, for swimming).
 // detail[p<id>] lists that day's runs: [{ setNumber, distanceKm, seconds }].
-export function runningChartData(entries, runType, { tempoDistance = '5k', exerciseId = 'running', paceKm = 1 } = {}) {
+export function runningChartData(entries, runType, { tempoDistance = '5k', exerciseId = 'running' } = {}) {
   const groups = new Map();
   for (const e of entries) {
     if (e.exercise !== exerciseId || e.run_type !== runType) continue;
@@ -519,13 +518,65 @@ export function runningChartData(entries, runType, { tempoDistance = '5k', exerc
     if (runType === 'easy') {
       value = Math.round(runs.reduce((sum, r) => sum + r.distance_km, 0) * 100) / 100;
     } else if (runType === 'tempo') {
-      value = Math.min(...runs.map((r) => runPace(r.duration_sec, r.distance_km))) * paceKm;
+      value = Math.min(...runs.map((r) => runPace(r.duration_sec, r.distance_km)));
     } else {
       const km = runs.reduce((sum, r) => sum + r.distance_km, 0);
       const seconds = runs.reduce((sum, r) => sum + r.duration_sec, 0);
-      value = runPace(seconds, km) * paceKm;
+      value = runPace(seconds, km);
     }
     const detail = runs.map((r) => ({ setNumber: r.set_number, distanceKm: r.distance_km, seconds: r.duration_sec }));
+    if (!perPerson.has(id)) perPerson.set(id, new Map());
+    perPerson.get(id).set(date, { value, detail });
+    allDates.add(date);
+  }
+
+  const rows = [...allDates].sort().map((date) => {
+    const row = { t: toTimestamp(date), date, detail: {} };
+    for (const [personId, byDate] of perPerson) {
+      const point = byDate.get(date);
+      row[seriesKey(personId)] = point ? point.value : null;
+      if (point) row.detail[seriesKey(personId)] = point.detail;
+    }
+    return row;
+  });
+  return { rows, personIds: [...perPerson.keys()] };
+}
+
+// ---------- Swimming ----------
+
+// Swimming pace, in seconds per 100 m (swimmers think in 100s, not km like runPace).
+export function swimPace(seconds, km) {
+  return runPace(seconds, km) / 10;
+}
+
+export const formatSwimPace = (secondsPer100m) => `${formatDuration(secondsPer100m)} /100m`;
+
+// Chart rows for the Swimming tile, in the same shape as buildChartData. Swimming has no
+// types to pick between (every swim counts), so there are only two views:
+//   distance: the day's total distance, km (lengths × each person's pool length).
+//   pace:     the day's average pace across every swim: total time / total distance,
+//             seconds per 100m.
+// detail[p<id>] lists that day's swims: [{ setNumber, distanceKm, seconds, lengths }].
+// `lengths` is null for a swim logged before lengths were saved.
+export function swimChartData(entries, view = 'distance') {
+  const groups = new Map();
+  for (const e of entries) {
+    if (e.exercise !== 'swimming') continue;
+    const key = `${e.person_id}|${e.date}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  }
+
+  const perPerson = new Map();
+  const allDates = new Set();
+  for (const [key, swims] of groups) {
+    const [personId, date] = key.split('|');
+    const id = Number(personId);
+    swims.sort((a, b) => a.set_number - b.set_number);
+    const km = swims.reduce((sum, s) => sum + s.distance_km, 0);
+    const seconds = swims.reduce((sum, s) => sum + s.duration_sec, 0);
+    const value = view === 'pace' ? swimPace(seconds, km) : Math.round(km * 100) / 100;
+    const detail = swims.map((s) => ({ setNumber: s.set_number, distanceKm: s.distance_km, seconds: s.duration_sec, lengths: s.lengths ?? null }));
     if (!perPerson.has(id)) perPerson.set(id, new Map());
     perPerson.get(id).set(date, { value, detail });
     allDates.add(date);

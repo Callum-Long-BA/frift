@@ -19,6 +19,7 @@ const COLUMNS = [
   'distance_km',
   'time_sec',
   'pace_sec_per_km',
+  'lengths',
   'body_weight_kg',
   'vo2max',
 ];
@@ -45,6 +46,7 @@ export function exportCsv({ personId, entries, exercises, bodyWeights = [], vo2m
         distance_km: e.distance_km,
         time_sec: e.duration_sec,
         pace_sec_per_km: Math.round(runPace(e.duration_sec, e.distance_km)),
+        lengths: e.lengths,
       });
     } else Object.assign(row, { weight_kg: e.weight, reps: e.reps, equipment: e.equipment });
     rows.push(row);

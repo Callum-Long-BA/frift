@@ -23,6 +23,9 @@ import {
   formatDuration,
   formatPace,
   matchesTempoDistance,
+  swimChartData,
+  swimPace,
+  formatSwimPace,
   vo2maxChartData,
 } from '../src/lib/metrics.js';
 
@@ -536,7 +539,6 @@ test('formatDuration and formatPace', () => {
   assert.equal(formatDuration(95), '1:35');
   assert.equal(formatDuration(3725), '1:02:05');
   assert.equal(formatPace(290), '4:50 /km');
-  assert.equal(formatPace(115, '/100m'), '1:55 /100m');
 });
 
 test('easy runs chart total distance per day', () => {
@@ -562,12 +564,10 @@ test('tempo runs chart the best pace, for the chosen distance only', () => {
   assert.equal(matchesTempoDistance(10.4, '10k'), true);
 });
 
-test('VO2 max sessions and hills chart average pace like intervals; swims per 100 m', () => {
+test('VO2 max sessions and hills chart average pace like intervals', () => {
   const entries = [runRow(1, '2026-09-01', 1, 'vo2max', 0.8, 200), runRow(1, '2026-09-01', 2, 'vo2max', 0.8, 200), runRow(1, '2026-09-02', 1, 'hills', 0.2, 60)];
   assert.equal(runningChartData(entries, 'vo2max').rows[0][seriesKey(1)], 250);
   assert.equal(runningChartData(entries, 'hills').rows[0][seriesKey(1)], 300);
-  const swim = [{ ...runRow(1, '2026-09-03', 1, 'easy', 1, 1200), exercise: 'swimming' }, { ...runRow(1, '2026-09-03', 2, 'tempo', 0.4, 400), exercise: 'swimming' }];
-  assert.equal(runningChartData(swim, 'tempo', { exerciseId: 'swimming', tempoDistance: 'all', paceKm: 0.1 }).rows[0][seriesKey(1)], 100);
 });
 
 test('VO2 max scores chart one value per person per day', () => {
@@ -595,6 +595,44 @@ test('running PRs: longest easy run, fastest tempo pace within the same distance
   assert.deepEqual(prs.get('2026-09-02'), []);
   assert.deepEqual(prs.get('2026-09-03'), ['running']);
   assert.deepEqual(prs.get('2026-09-05'), []);
+});
+
+// ---------- swimming ----------
+
+const swimRow = (person_id, date, set_number, distance_km, duration_sec, lengths = null) => ({
+  id: nextId++, person_id, exercise: 'swimming', date, set_number, run_type: 'easy', distance_km, duration_sec, lengths,
+  weight: null, reps: null, duration_min: null, equipment: null,
+});
+
+test('swimPace is pace per 100m, not per km', () => {
+  assert.equal(swimPace(90, 0.5), 18); // 180 s/km / 10
+  assert.equal(formatSwimPace(102), '1:42 /100m');
+});
+
+test('swimChartData: distance view totals the day\'s lengths-derived distance', () => {
+  const entries = [
+    swimRow(1, '2026-09-01', 1, 0.5, 600, 20),
+    swimRow(1, '2026-09-01', 2, 0.25, 300, 10),
+    swimRow(1, '2026-09-02', 1, 1, 1200, 40),
+  ];
+  const { rows } = swimChartData(entries, 'distance');
+  assert.equal(rows[0][seriesKey(1)], 0.75);
+  assert.equal(rows[0].detail[seriesKey(1)].length, 2);
+  assert.equal(rows[0].detail[seriesKey(1)][0].lengths, 20);
+  assert.equal(rows[1][seriesKey(1)], 1);
+});
+
+test('swimChartData: pace view averages the day\'s total time over total distance, per 100m', () => {
+  const entries = [swimRow(1, '2026-09-01', 1, 0.5, 450), swimRow(1, '2026-09-01', 2, 0.5, 450)];
+  const { rows } = swimChartData(entries, 'pace');
+  assert.equal(rows[0][seriesKey(1)], 90); // 900s over 1km = 900 s/km = 90 s/100m
+});
+
+test('swimChartData: a swim logged before lengths were saved still counts, with lengths null', () => {
+  const entries = [swimRow(1, '2026-09-01', 1, 0.5, 600, null)];
+  const { rows } = swimChartData(entries, 'distance');
+  assert.equal(rows[0][seriesKey(1)], 0.5);
+  assert.equal(rows[0].detail[seriesKey(1)][0].lengths, null);
 });
 
 // ---------- chart ranges ----------

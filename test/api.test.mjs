@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { route, HttpError, setGroupFinder } from '../api/_http.js';
-import { copyName, parseBodyWeight, parseDate, parseExerciseName, parseName, parseNewEntry, parseRoutine, parseVo2max, slugify } from '../api/_validate.js';
+import { copyName, parseBodyWeight, parseDate, parseExerciseName, parseName, parseNewEntry, parsePoolLength, parseRoutine, parseVo2max, slugify } from '../api/_validate.js';
 
 // One pretend group, code 'secret-lift', instead of the groups table.
 setGroupFinder(async (code) => (code === 'secret-lift' ? { id: 1, code } : null));
@@ -217,16 +217,15 @@ test('VO2 max scores: 10 to 100, one decimal place kept', () => {
 
 const run = { personId: 1, exercise: 'running', date: '2026-09-19' };
 
-test('running: VO2 max sessions and hills take several reps; swimming does not have them', () => {
+test('running: VO2 max sessions and hills take several reps', () => {
   const reps = [{ distanceKm: 0.8, seconds: 200 }, { distanceKm: 0.8, seconds: 198 }];
   assert.equal(parseNewEntry({ ...run, runType: 'vo2max', runs: reps }, exercises, now).runs.length, 2);
   assert.equal(parseNewEntry({ ...run, runType: 'hills', runs: reps }, exercises, now).runs.length, 2);
-  assert.throws(() => parseNewEntry({ ...run, exercise: 'swimming', runType: 'hills', runs: reps }, exercises, now), /run type/);
 });
 
 test('running: easy and tempo take one run; intervals take several', () => {
   const easy = parseNewEntry({ ...run, runType: 'easy', runs: [{ distanceKm: '5.234', seconds: 1800 }] }, exercises, now);
-  assert.deepEqual(easy, { kind: 'running', personId: 1, exercise: 'running', date: '2026-09-19', runType: 'easy', runs: [{ distanceKm: 5.23, seconds: 1800 }] });
+  assert.deepEqual(easy, { kind: 'running', personId: 1, exercise: 'running', date: '2026-09-19', runType: 'easy', runs: [{ distanceKm: 5.23, seconds: 1800, lengths: null }] });
   const intervals = parseNewEntry({ ...run, runType: 'intervals', runs: [{ distanceKm: 0.4, seconds: 90 }, { distanceKm: 0.4, seconds: 88 }] }, exercises, now);
   assert.equal(intervals.runs.length, 2);
   assert.throws(() => parseNewEntry({ ...run, runType: 'tempo', runs: [{ distanceKm: 5, seconds: 1500 }, { distanceKm: 5, seconds: 1500 }] }, exercises, now), /one run/);
@@ -243,6 +242,42 @@ test('running: rejects bad run types, distances and times', () => {
     { ...run, runType: 'easy', runs: [{ distanceKm: 5, seconds: '' }] },
   ];
   for (const body of bad) assert.throws(() => parseNewEntry(body, exercises, now), HttpError);
+});
+
+const swim = { personId: 1, exercise: 'swimming', date: '2026-09-19' };
+
+test('swimming: always stored as easy, carries the lengths it was converted from', () => {
+  const e = parseNewEntry({ ...swim, runs: [{ distanceKm: '0.5', seconds: 600, lengths: '20' }] }, exercises, now);
+  assert.deepEqual(e, {
+    kind: 'running',
+    personId: 1,
+    exercise: 'swimming',
+    date: '2026-09-19',
+    runType: 'easy',
+    runs: [{ distanceKm: 0.5, seconds: 600, lengths: 20 }],
+  });
+  // A runType in the body is ignored for swimming; it is always 'easy'.
+  const withType = parseNewEntry({ ...swim, runType: 'tempo', runs: [{ distanceKm: 0.5, seconds: 600, lengths: 20 }] }, exercises, now);
+  assert.equal(withType.runType, 'easy');
+});
+
+test('swimming: rejects more than one swim at a time, and bad lengths', () => {
+  const bad = [
+    { ...swim, runs: [{ distanceKm: 0.5, seconds: 600, lengths: 20 }, { distanceKm: 0.5, seconds: 600, lengths: 20 }] },
+    { ...swim, runs: [{ distanceKm: 0.5, seconds: 600, lengths: 0 }] },
+    { ...swim, runs: [{ distanceKm: 0.5, seconds: 600, lengths: 1.5 }] },
+    { ...swim, runs: [{ distanceKm: 0.5, seconds: 600, lengths: 1001 }] },
+    { ...swim, runs: [{ distanceKm: 0.5, seconds: 600, lengths: '' }] },
+  ];
+  for (const body of bad) assert.throws(() => parseNewEntry(body, exercises, now), HttpError);
+});
+
+test('parsePoolLength keeps one decimal and checks the range', () => {
+  assert.equal(parsePoolLength('25'), 25);
+  assert.equal(parsePoolLength(33.33), 33.3);
+  for (const value of ['', 4.9, 200.1, 'abc']) {
+    assert.throws(() => parsePoolLength(value), HttpError);
+  }
 });
 
 test('parseBodyWeight keeps one decimal and checks the range', () => {

@@ -61,8 +61,9 @@ function formatSet(row, kind) {
 // reps-only PR is the day's total instead: "Pull ups [PR! 🏆 24 Total daily reps]".
 function exerciseText(exercise, rows, isPr, prEntryIds) {
   let name = escapeMarkdown(exercise.name);
-  // Running says which kinds of run: "Running (easy, tempo)".
-  if (exercise.kind === 'running') {
+  // Running says which kinds of run: "Running (easy, tempo)". Swimming has no types to
+  // list (every swim is logged the same way), so it is left alone.
+  if (exercise.kind === 'running' && exercise.id !== 'swimming') {
     const types = RUN_TYPES.filter((t) => rows.some((r) => r.run_type === t));
     if (types.length > 0) name += ` (${types.map((t) => RUN_TYPE_LABELS[t].toLowerCase().replace('vo2', 'VO2')).join(', ')})`;
   }

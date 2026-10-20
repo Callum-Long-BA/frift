@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { RUN_TYPE_LABELS, TEMPO_DISTANCES, paceUnitFor, runTypesFor } from '../lib/constants.js';
+import { RUN_TYPES, RUN_TYPE_LABELS, TEMPO_DISTANCES } from '../lib/constants.js';
 import { formatDayLong, formatDuration, formatPace, runPace, runningChartData, vo2maxChartData } from '../lib/metrics.js';
 import { readStored, writeStored } from '../lib/storage.js';
 import ChartFrame from './ChartFrame.jsx';
@@ -12,20 +12,16 @@ const TEMPO_KEY = 'frift.tempoDistance';
 
 const km = (n) => `${Number(n).toLocaleString('en-GB', { maximumFractionDigits: 2 })} km`;
 
-// One run as text: "5 km in 24:10 (4:50 /km)". Swims give their pace per 100 m.
-export function runText(r, exerciseId = 'running') {
-  const pace = paceUnitFor(exerciseId);
-  return `${km(r.distanceKm)} in ${formatDuration(r.seconds)} (${formatPace(runPace(r.seconds, r.distanceKm) * pace.km, pace.label)})`;
-}
+// One run as text: "5 km in 24:10 (4:50 /km)".
+export const runText = (r) => `${km(r.distanceKm)} in ${formatDuration(r.seconds)} (${formatPace(runPace(r.seconds, r.distanceKm))})`;
 
 // Hover card: each person's value for that day, and every run (or interval) behind it.
-function RunTooltip({ active, payload, label, runType, exerciseId }) {
+function RunTooltip({ active, payload, label, runType }) {
   if (!active || !payload?.length) return null;
   const items = payload.filter((p) => p.value !== null && p.value !== undefined);
   if (items.length === 0) return null;
   // Best first: furthest for easy, fastest pace for tempo and intervals.
   items.sort((a, b) => (runType === 'easy' || runType === SCORE ? b.value - a.value : a.value - b.value));
-  const paceLabel = paceUnitFor(exerciseId).label;
 
   return (
     <div className="tip">
@@ -39,7 +35,7 @@ function RunTooltip({ active, payload, label, runType, exerciseId }) {
                 <span className="swatch" style={{ background: item.color ?? item.stroke }} aria-hidden="true" />
                 <span className="tip-name">{item.name}</span>
                 <span className="tip-value">
-                  {runType === 'easy' ? km(item.value) : runType === SCORE ? `VO2 max ${item.value}` : formatPace(item.value, paceLabel)}
+                  {runType === 'easy' ? km(item.value) : runType === SCORE ? `VO2 max ${item.value}` : formatPace(item.value)}
                 </span>
               </div>
               <p className="tip-sets">
@@ -47,7 +43,7 @@ function RunTooltip({ active, payload, label, runType, exerciseId }) {
                   <span key={r.setNumber} className="tip-set is-counted">
                     {i > 0 && <br />}
                     {runs.length > 1 && `${i + 1}. `}
-                    {runText(r, exerciseId)}
+                    {runText(r)}
                   </span>
                 ))}
               </p>
@@ -72,24 +68,20 @@ function subtitleFor(runType, tempoDistance, noun) {
 // VO2 max scores), and for tempo a switch picks 5K, 10K or all distances. Both choices are
 // remembered in this browser, per tile. The + button logs whatever is shown.
 export default function RunningChart({ exercise, people, entries, vo2max = [], me, loading, onAdd, axisStart }) {
-  const views = [...runTypesFor(exercise.id), ...(exercise.id === 'running' ? [SCORE] : [])];
+  const views = [...RUN_TYPES, SCORE];
   const typeKey = `${RUN_TYPE_KEY}.${exercise.id}`;
   const [runType, setRunType] = useState(() => {
     const stored = readStored(typeKey) ?? (exercise.id === 'running' ? readStored(RUN_TYPE_KEY) : null);
     return views.includes(stored) ? stored : 'easy';
   });
-  const pace = paceUnitFor(exercise.id);
   const [tempoDistance, setTempoDistance] = useState(() => {
     const stored = readStored(TEMPO_KEY);
     return TEMPO_DISTANCES.some((d) => d.key === stored) ? stored : '5k';
   });
 
   const { rows, personIds } = useMemo(
-    () =>
-      runType === SCORE
-        ? vo2maxChartData(vo2max)
-        : runningChartData(entries, runType, { tempoDistance, exerciseId: exercise.id, paceKm: pace.km }),
-    [entries, vo2max, runType, tempoDistance, exercise.id, pace.km],
+    () => (runType === SCORE ? vo2maxChartData(vo2max) : runningChartData(entries, runType, { tempoDistance })),
+    [entries, vo2max, runType, tempoDistance],
   );
 
   function changeRunType(next) {
@@ -102,13 +94,12 @@ export default function RunningChart({ exercise, people, entries, vo2max = [], m
     writeStored(TEMPO_KEY, next);
   }
 
-  const noun = exercise.id === 'swimming' ? 'swim' : 'run';
   const label = runType === SCORE ? 'VO2 max score' : RUN_TYPE_LABELS[runType].toLowerCase();
   let emptyText;
   if (loading) emptyText = 'Loading…';
   else if (runType === SCORE) emptyText = me ? 'No VO2 max scores yet. Tap + to log one.' : 'No VO2 max scores yet. Choose who you are to log one.';
-  else if (me) emptyText = `No ${runType === 'tempo' && tempoDistance !== 'all' ? `${TEMPO_DISTANCES.find((d) => d.key === tempoDistance).label} ` : ''}${label} ${noun}s yet. Tap + to log one.`;
-  else emptyText = `No ${label} ${noun}s yet. Choose who you are to log one.`;
+  else if (me) emptyText = `No ${runType === 'tempo' && tempoDistance !== 'all' ? `${TEMPO_DISTANCES.find((d) => d.key === tempoDistance).label} ` : ''}${label} runs yet. Tap + to log one.`;
+  else emptyText = `No ${label} runs yet. Choose who you are to log one.`;
 
   const controls = (
     <>
@@ -147,7 +138,7 @@ export default function RunningChart({ exercise, people, entries, vo2max = [], m
       title={exercise.name}
       subtitle={subtitleFor(runType, tempoDistance, noun)}
       controls={controls}
-      addLabel={runType === SCORE ? 'Log a VO2 max score' : `Log a ${label} ${noun}`}
+      addLabel={runType === SCORE ? 'Log a VO2 max score' : `Log a ${label} run`}
       canAdd={Boolean(me)}
       onAdd={() => onAdd(runType)}
     >
@@ -163,7 +154,7 @@ export default function RunningChart({ exercise, people, entries, vo2max = [], m
           reversed={runType !== 'easy' && runType !== SCORE}
           yDomain={runType === 'easy' ? undefined : ['auto', 'auto']}
           yTickFormatter={runType === 'easy' || runType === SCORE ? (v) => `${v}` : (v) => formatDuration(v)}
-          tooltip={<RunTooltip runType={runType} exerciseId={exercise.id} />}
+          tooltip={<RunTooltip runType={runType} />}
         />
       )}
     </ChartFrame>
