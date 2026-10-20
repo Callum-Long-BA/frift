@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { MAX_EXERCISES, MAX_EXERCISE_NAME, MUSCLE_GROUPS } from '../lib/constants.js';
+import { EQUIPMENT, EQUIPMENT_LABELS, MAX_EXERCISES, MAX_EXERCISE_NAME, MUSCLE_GROUPS } from '../lib/constants.js';
+import { tidyExerciseName } from '../lib/names.js';
 
 export default function AddExerciseDialog({ person, exercises, onClose, onCreated }) {
   const dialogRef = useRef(null);
   const [name, setName] = useState('');
   const [kind, setKind] = useState('strength');
   const [muscleGroup, setMuscleGroup] = useState('');
-  const [equipmentChoice, setEquipmentChoice] = useState(false);
+  // Which equipment it can be done with. Two or more means each set says which was used.
+  const [equipment, setEquipment] = useState([]);
   const repsOnly = kind === 'reps';
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -21,7 +23,7 @@ export default function AddExerciseDialog({ person, exercises, onClose, onCreate
 
   async function submit(event) {
     event.preventDefault();
-    const clean = name.trim().replace(/\s+/g, ' ');
+    const clean = tidyExerciseName(name);
     if (!clean) {
       setError('Enter a name for the exercise.');
       return;
@@ -37,7 +39,8 @@ export default function AddExerciseDialog({ person, exercises, onClose, onCreate
     setBusy(true);
     setError('');
     try {
-      const created = await api.addExercise(clean, person.id, kind, !repsOnly && equipmentChoice, repsOnly ? null : muscleGroup);
+      const options = !repsOnly && equipment.length > 1 ? EQUIPMENT.filter((e) => equipment.includes(e)) : [];
+      const created = await api.addExercise(clean, person.id, kind, options, repsOnly ? null : muscleGroup);
       onCreated(created);
       closeDialog();
     } catch (err) {
@@ -84,7 +87,8 @@ export default function AddExerciseDialog({ person, exercises, onClose, onCreate
           />
           <p className="hint">
             Everyone in the group will see it, and it cannot be removed from the app once added, so check the
-            spelling. {exercises.length} of {MAX_EXERCISES} used.
+            spelling. It is saved in Title Case and singular
+            {name.trim() ? <> (as &ldquo;{tidyExerciseName(name)}&rdquo;)</> : ''}. {exercises.length} of {MAX_EXERCISES} used.
           </p>
         </div>
 
@@ -117,18 +121,22 @@ export default function AddExerciseDialog({ person, exercises, onClose, onCreate
         )}
 
         {!repsOnly && (
-          <label className="check-field">
-            <input
-              type="checkbox"
-              checked={equipmentChoice}
-              disabled={busy}
-              onChange={(e) => setEquipmentChoice(e.target.checked)}
-            />
-            <span>
-              Can be done with a barbell or dumbbells
-              <span className="hint"> Each set is logged as one or the other, and Equalise can double dumbbell weights.</span>
-            </span>
-          </label>
+          <fieldset className="equipment" disabled={busy}>
+            <legend>Can be done with</legend>
+            {EQUIPMENT.map((e) => (
+              <label key={e}>
+                <input
+                  type="checkbox"
+                  checked={equipment.includes(e)}
+                  onChange={(event) =>
+                    setEquipment((prev) => (event.target.checked ? [...prev, e] : prev.filter((x) => x !== e)))
+                  }
+                />
+                {EQUIPMENT_LABELS[e]}
+              </label>
+            ))}
+            <p className="hint">Tick two or more to log each set as one of them. Equalise doubles dumbbell weights.</p>
+          </fieldset>
         )}
 
         {error && (

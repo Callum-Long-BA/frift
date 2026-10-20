@@ -78,3 +78,12 @@ test('matchRoutine: the most alike of a person\'s routines, if alike enough', ()
   assert.equal(matchRoutine(['squat', 'leg_extension'], routines), null);
   assert.equal(matchRoutine(push, []), null);
 });
+
+test('matchRoutine: the routine plus a few extras, or with a couple swapped, still counts', () => {
+  const five = ['a', 'b', 'c', 'd', 'e'];
+  const routines = [{ name: 'Five', exercise_ids: five }];
+  assert.equal(matchRoutine([...five, 'x', 'y', 'z'], routines).name, 'Five'); // 5 of 5 + 3 extras
+  assert.equal(matchRoutine(['a', 'b', 'c', 'x', 'y'], routines).name, 'Five'); // 3 of 5 + 2 swaps
+  assert.equal(matchRoutine(['a', 'b', 'x', 'y'], routines), null); // only 2 of 5
+  assert.equal(matchRoutine([...five, 'w', 'x', 'y', 'z'], routines), null); // 4 extras is a different day
+});

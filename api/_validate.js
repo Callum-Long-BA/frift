@@ -1,8 +1,12 @@
 import {
-  EQUIPMENT,
+  EQUIPMENT_LABELS,
   MAX_EXERCISE_NAME,
   MAX_LENGTHS_PER_SWIM,
   MAX_POOL_LENGTH_M,
+  MAX_VO2MAX,
+  MIN_VO2MAX,
+  MULTI_RUN_TYPES,
+  RUN_ROW_LABELS,
   MAX_RUN_KM,
   MAX_RUN_SECONDS,
   MAX_SETS_PER_ENTRY,
@@ -10,7 +14,9 @@ import {
   MIN_POOL_LENGTH_M,
   MIN_WEIGHT,
   RUN_TYPES,
+  equipmentOptions,
 } from '../src/lib/constants.js';
+import { tidyExerciseName } from '../src/lib/names.js';
 import { HttpError } from './_http.js';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -34,8 +40,9 @@ export function parseName(value) {
   return name;
 }
 
+// Stored in Title Case and singular (see tidyExerciseName): "lateral raises" -> "Lateral Raise".
 export function parseExerciseName(value) {
-  const name = String(value ?? '').trim().replace(/\s+/g, ' ');
+  const name = tidyExerciseName(value);
   if (name.length < 1 || name.length > MAX_EXERCISE_NAME) {
     throw new HttpError(400, `Exercise name must be 1 to ${MAX_EXERCISE_NAME} characters.`);
   }
@@ -70,13 +77,14 @@ export function parseDate(value, now = new Date()) {
   return value;
 }
 
-// `exercises` is the list from the database: [{ id, kind, equipment_choice }].
+// `exercises` is the list from the database: [{ id, kind, equipment_choice, equipment_options }].
 // Returns a normalised entry:
 //   { kind: 'strength', personId, exercise, date, equipment, sets: [{ weight, reps }] }
 //   { kind: 'reps',     personId, exercise, date, equipment: null, sets: [{ weight, reps }] }  (weight null unless added)
 //   { kind: 'cardio',   personId, exercise, date, durationMin, speedKmh, inclinePct }
 //   { kind: 'running',  personId, exercise, date, runType, runs: [{ distanceKm, seconds }] }
-//     (one run for easy and tempo; one per interval for intervals)
+//     (one run for easy and tempo; one per rep for intervals, VO2 max sessions and hills)
+// Weights keep up to 2 decimal places (1.25 kg).
 export function parseNewEntry(body, exercises, now = new Date()) {
   const personId = parseId(body?.personId, 'Person');
   const exercise = exercises.find((e) => e.id === body?.exercise);
@@ -105,17 +113,18 @@ export function parseNewEntry(body, exercises, now = new Date()) {
     // lengths swum alongside the distance that lengths × pool length works out to.
     const isSwimming = exercise.id === 'swimming';
     const runType = isSwimming ? 'easy' : body?.runType;
-    if (!RUN_TYPES.includes(runType)) throw new HttpError(400, 'Choose easy, tempo or intervals.');
+    if (!RUN_TYPES.includes(runType)) throw new HttpError(400, 'Choose a run type.');
+    const multi = !isSwimming && MULTI_RUN_TYPES.includes(runType);
     const rawRuns = body?.runs;
-    const most = !isSwimming && runType === 'intervals' ? MAX_SETS_PER_ENTRY : 1;
+    const most = multi ? MAX_SETS_PER_ENTRY : 1;
     if (!Array.isArray(rawRuns) || rawRuns.length < 1 || rawRuns.length > most) {
       throw new HttpError(
         400,
-        !isSwimming && runType === 'intervals' ? `Log between 1 and ${most} intervals at a time.` : isSwimming ? 'Log one swim at a time.' : 'Log one run at a time.',
+        multi ? `Log between 1 and ${most} reps at a time.` : isSwimming ? 'Log one swim at a time.' : 'Log one run at a time.',
       );
     }
     const runs = rawRuns.map((r, i) => {
-      const label = !isSwimming && runType === 'intervals' ? `Interval ${i + 1}: ` : '';
+      const label = multi ? `${RUN_ROW_LABELS[runType]} ${i + 1}: ` : '';
       const distanceKm = toNumber(r?.distanceKm);
       const seconds = toNumber(r?.seconds);
       if (!Number.isFinite(distanceKm) || distanceKm <= 0 || distanceKm > MAX_RUN_KM) {
@@ -158,13 +167,18 @@ export function parseNewEntry(body, exercises, now = new Date()) {
     if (!Number.isInteger(reps) || reps < 1 || reps > 200) {
       throw new HttpError(400, `Set ${i + 1}: reps must be a whole number from 1 to 200.`);
     }
-    return { weight, reps };
+    return { weight: Math.round(weight * 100) / 100, reps };
   });
 
-  // Exercises that allow a choice need to say barbell or dumbbell. Others store nothing.
+  // Exercises that allow a choice need to say which (barbell, dumbbell or cable, from that
+  // exercise's options). Others store nothing.
   let equipment = null;
-  if (exercise.equipment_choice && !repsOnly) {
-    if (!EQUIPMENT.includes(body?.equipment)) throw new HttpError(400, 'Choose barbell or dumbbell.');
+  const options = repsOnly ? [] : equipmentOptions(exercise);
+  if (options.length > 0) {
+    if (!options.includes(body?.equipment)) {
+      const names = options.map((o) => EQUIPMENT_LABELS[o].toLowerCase());
+      throw new HttpError(400, `Choose ${names.slice(0, -1).join(', ')} or ${names.at(-1)}.`);
+    }
     equipment = body.equipment;
   }
 
@@ -189,6 +203,17 @@ export function parseBodyWeight(body, now = new Date()) {
     throw new HttpError(400, 'Body weight must be between 20 and 400 kg.');
   }
   return { personId, date, weightKg: Math.round(weightKg * 10) / 10 };
+}
+
+// { personId, date, value } for a VO2 max score (ml/kg/min). One decimal place is kept.
+export function parseVo2max(body, now = new Date()) {
+  const personId = parseId(body?.personId, 'Person');
+  const date = parseDate(body?.date, now);
+  const value = toNumber(body?.value);
+  if (!Number.isFinite(value) || value < MIN_VO2MAX || value > MAX_VO2MAX) {
+    throw new HttpError(400, `VO2 max must be between ${MIN_VO2MAX} and ${MAX_VO2MAX}.`);
+  }
+  return { personId, date, value: Math.round(value * 10) / 10 };
 }
 
 export const MAX_ROUTINE_NAME = 30;

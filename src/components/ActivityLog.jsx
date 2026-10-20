@@ -5,8 +5,9 @@ import { matchRoutine } from '../lib/routines.js';
 const SHOWN = 5;
 
 // The latest sessions (one person, one day), by the date they were for, newest first. Each
-// says what was done: the routine it matches (one of that person's own, see matchRoutine)
-// plus anything extra, or else the exercises; reps-only exercises show the day's total reps.
+// says what was done: the routine it most likely was (one of that person's own, see
+// matchRoutine; a few extras or swaps still count as the routine), or else the exercises;
+// reps-only exercises show the day's total reps.
 // The line below says how many personal records that session set, and in which exercises.
 export default function ActivityLog({ people, entries, exercises, routines = [] }) {
   const sessions = useMemo(() => recentSessions(entries, exercises, SHOWN), [entries, exercises]);
@@ -15,14 +16,13 @@ export default function ActivityLog({ people, entries, exercises, routines = [] 
   const kindOf = useMemo(() => new Map(exercises.map((e) => [e.id, e.kind])), [exercises]);
   const names = (ids) => ids.map((id) => exerciseName.get(id) ?? id).join(', ');
 
-  // "Push Day + Leg extension · Pull ups 24 reps", or the exercises if no routine matches.
+  // "Push Day · Pull Up 24 reps", or the exercises if no routine matches.
   function whatWasDone(s) {
     const routine = matchRoutine(s.exerciseIds, routines.filter((r) => r.person_id === s.personId));
-    const inRoutine = new Set(routine?.exercise_ids ?? []);
     const repsOnly = s.exerciseIds.filter((id) => kindOf.get(id) === 'reps');
-    const others = s.exerciseIds.filter((id) => kindOf.get(id) !== 'reps' && !inRoutine.has(id));
+    const others = s.exerciseIds.filter((id) => kindOf.get(id) !== 'reps');
     const parts = [];
-    if (routine) parts.push(others.length > 0 ? `${routine.name} + ${names(others)}` : routine.name);
+    if (routine) parts.push(routine.name);
     else if (others.length > 0) parts.push(names(others));
     const totals = repsOnly.map((id) => {
       const reps = entries

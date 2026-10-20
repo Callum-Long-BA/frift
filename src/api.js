@@ -40,8 +40,8 @@ export const api = {
   addPerson: (name) => request('people', { method: 'POST', body: { name } }),
   updatePoolLength: (personId, poolLengthM) => request('people', { method: 'PUT', body: { personId, poolLengthM } }),
   exercises: () => request('exercises'),
-  addExercise: (name, personId, kind, equipmentChoice, muscleGroup) =>
-    request('exercises', { method: 'POST', body: { name, personId, kind, equipmentChoice, muscleGroup } }),
+  addExercise: (name, personId, kind, equipmentOptions, muscleGroup) =>
+    request('exercises', { method: 'POST', body: { name, personId, kind, equipmentOptions, muscleGroup } }),
   entries: () => request('entries'),
   addEntry: (payload) => request('entries', { method: 'POST', body: payload }),
   deleteEntry: (id, personId) => request(`entries?id=${id}&personId=${personId}`, { method: 'DELETE' }),
@@ -56,4 +56,7 @@ export const api = {
   bodyWeights: () => request('bodyweights'),
   logBodyWeight: (personId, date, weightKg) =>
     request('bodyweights', { method: 'POST', body: { personId, date, weightKg } }),
+  vo2max: () => request('vo2max'),
+  logVo2max: (personId, date, value) => request('vo2max', { method: 'POST', body: { personId, date, value } }),
+  deleteVo2max: (personId, date) => request(`vo2max?personId=${personId}&date=${date}`, { method: 'DELETE' }),
 };

@@ -252,3 +252,76 @@ drop index if exists people_name_unique;
 alter table people add column if not exists pool_length_m numeric(5,1)
   check (pool_length_m is null or pool_length_m between 5 and 200);
 alter table entries add column if not exists lengths int check (lengths is null or lengths between 1 and 1000);
+
+-- Cable as a third kind of equipment. Exercises can list which they offer
+-- (equipment_options); exercises without a list but with equipment_choice offer barbell or
+-- dumbbell, as before.
+alter table exercises add column if not exists equipment_options text[];
+-- The old equipment and run type checks were unnamed, so find them by what they check.
+do $$
+declare c record;
+begin
+  for c in select conname from pg_constraint
+           where conrelid = 'entries'::regclass and contype = 'c' and conname <> 'entries_shape'
+             and (pg_get_constraintdef(oid) like '%equipment%' or pg_get_constraintdef(oid) like '%run_type%')
+  loop
+    execute format('alter table entries drop constraint %I', c.conname);
+  end loop;
+end $$;
+alter table entries add constraint entries_equipment_check check (equipment in ('barbell', 'dumbbell', 'cable'));
+
+-- Every overhead tricep extension can be done on a cable, with a dumbbell or with a barbell.
+update exercises set equipment_choice = true, equipment_options = '{cable,dumbbell,barbell}'
+  where kind = 'strength' and lower(name) like '%overhead%extension%';
+
+-- VO2 max sessions and hill runs, on the Running tile, alongside easy, tempo and intervals.
+alter table entries add constraint entries_run_type_check
+  check (run_type in ('easy', 'tempo', 'intervals', 'vo2max', 'hills'));
+
+-- VO2 max scores (ml/kg/min, e.g. from a watch), one per person per day, charted on the
+-- Running tile.
+create table if not exists vo2max_readings (
+  person_id  int not null references people(id) on delete cascade,
+  entry_date date not null,
+  value      numeric(4,1) not null check (value between 10 and 100),
+  created_at timestamptz not null default now(),
+  primary key (person_id, entry_date)
+);
+
+-- Exercise names in Title Case and singular, as the app now stores new ones (see
+-- src/lib/names.js): "Lateral raises" -> "Lateral Raise". Each word's first letter is
+-- capitalised and the rest left as it is; one "s" is dropped from the end of the name (before
+-- any bracketed part) unless it ends "ss", "us" or "is". A rename that would clash with
+-- another exercise's name is skipped and reported.
+do $$
+declare
+  r record;
+  main text;
+  bracket text;
+  tidy text;
+  prev text;
+  c text;
+  i int;
+begin
+  for r in select id, name from exercises loop
+    tidy := '';
+    prev := ' ';
+    for i in 1 .. char_length(r.name) loop
+      c := substr(r.name, i, 1);
+      if prev in (' ', '(', '-', '/') then c := upper(c); end if;
+      tidy := tidy || c;
+      prev := c;
+    end loop;
+    main := coalesce(substring(tidy from '^(.*?)\s*\(.*\)$'), tidy);
+    bracket := substr(tidy, char_length(main) + 1);
+    if main ~* '[^siu]s$' then main := left(main, -1); end if;
+    tidy := main || bracket;
+    if tidy <> r.name then
+      if exists (select 1 from exercises o where lower(o.name) = lower(tidy) and o.id <> r.id) then
+        raise notice 'Not renamed: "%" would clash with an existing "%"', r.name, tidy;
+      else
+        update exercises set name = tidy where id = r.id;
+      end if;
+    end if;
+  end loop;
+end $$;

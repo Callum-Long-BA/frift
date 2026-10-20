@@ -1180,6 +1180,14 @@ fieldset {
   border-style: dashed;
 }
 
+/* Muscle group filters above the exercise list, when no routine is chosen. */
+.mobile-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
 .mobile-exercises {
   display: grid;
   gap: 8px;
@@ -1222,6 +1230,25 @@ fieldset {
   flex: none;
   min-width: 4.5rem;
   padding: 0.7rem 1rem;
+}
+
+/* Under the board: the CSV export, kept small and quiet on purpose. */
+.board-foot {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 24px;
+}
+
+.quiet-btn {
+  font-size: 0.75rem;
+  color: var(--text-2);
+  opacity: 0.6;
+}
+
+.quiet-btn:hover,
+.quiet-btn:focus-visible {
+  opacity: 1;
 }
 
 /* The full board on a phone: a button back to the simple view. */

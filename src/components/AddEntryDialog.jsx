@@ -1,31 +1,53 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import {
-  COUNTED_SETS,
+  EQUIPMENT_LABELS,
   MAX_LENGTHS_PER_SWIM,
   MAX_POOL_LENGTH_M,
   MAX_SETS_PER_ENTRY,
+  MAX_VO2MAX,
   MAX_WEIGHT,
   MIN_POOL_LENGTH_M,
+  MIN_VO2MAX,
   MIN_WEIGHT,
+  MULTI_RUN_TYPES,
+  RUN_ROW_LABELS,
   RUN_TYPES,
   RUN_TYPE_LABELS,
+  WEIGHT_STEP,
+  equipmentOptions,
+  equipmentTag,
 } from '../lib/constants.js';
-import { dayLabel, exerciseHistory, lastSession, nextSetNumber, todayString } from '../lib/metrics.js';
+import { dayLabel, exerciseHistory, formatDuration, formatPace, lastSession, nextSetNumber, runPace, todayString } from '../lib/metrics.js';
 import { runText } from './RunningChart.jsx';
 import { swimText } from './SwimmingChart.jsx';
 import { cardioText } from './CardioChart.jsx';
 
 const EMPTY_RUN = { km: '', min: '', sec: '' };
 
+// The Running tile's extra choice in the dialog: a VO2 max score rather than a run.
+const SCORE = 'score';
+
+// The time (or pace) boxes as seconds, or null if they are not whole minutes and 0-59 seconds.
+function boxSeconds(min, sec) {
+  const m = min === '' ? 0 : Number(min);
+  const s = sec === '' ? 0 : Number(sec);
+  if (!Number.isInteger(m) || m < 0 || !Number.isInteger(s) || s < 0 || s > 59) return null;
+  return m * 60 + s;
+}
+
 // `runType` is the run type the Running tile was showing, used as the starting choice.
 // `note` is this person's note for next time on this exercise (or null); `onSaveNote(text)`
 // saves it (empty removes it). `onSavePoolLength(metres)` saves this person's pool length,
-// used (and offered to save) when logging a swim.
+// used (and offered to save) when logging a swim. `vo2max` is everyone's VO2 max scores;
+// `onLogVo2max(date, value)` and `onDeleteVo2max(date)` save and remove this person's.
 export default function AddEntryDialog({
   exercise,
   person,
   entries,
+  vo2max = [],
+  onLogVo2max,
+  onDeleteVo2max,
   note = null,
   onSaveNote,
   onSavePoolLength,
@@ -49,21 +71,31 @@ export default function AddEntryDialog({
   const isSwimming = exercise.id === 'swimming';
   const isRunning = exercise.kind === 'running' && !isSwimming;
   const repsOnly = exercise.kind === 'reps';
-  const hasEquipment = exercise.kind === 'strength' && exercise.equipment_choice === true;
-  const [runType, setRunType] = useState(initialRunType);
+  const options = equipmentOptions(exercise);
+  const hasEquipment = options.length > 0;
+  // Running also offers a VO2 max score.
+  const runChoices = [...RUN_TYPES, SCORE];
+  const [runType, setRunType] = useState(runChoices.includes(initialRunType) ? initialRunType : 'easy');
   const [runs, setRuns] = useState([EMPTY_RUN]);
-  const isIntervals = runType === 'intervals';
+  const isScore = isRunning && runType === SCORE;
+  const isMulti = MULTI_RUN_TYPES.includes(runType);
+  const rowLabel = RUN_ROW_LABELS[runType] ?? 'Run';
+  const rowName = (i) => (isMulti ? `${rowLabel} ${i + 1}` : 'Run');
+  // Each run is entered as distance and time, or distance and pace per km, and the other is
+  // worked out.
+  const [byPace, setByPace] = useState(false);
+  const [score, setScore] = useState('');
   const [poolLength, setPoolLength] = useState(() => (person.pool_length_m != null ? String(person.pool_length_m) : ''));
   const [swimLengths, setSwimLengths] = useState('');
   const [swimMin, setSwimMin] = useState('');
   const [swimSec, setSwimSec] = useState('');
 
-  // Start on whatever this person used last time for this exercise, else barbell.
+  // Start on whatever this person used last time for this exercise, else its first option.
   const [equipment, setEquipment] = useState(() => {
     const previous = entries
-      .filter((e) => e.person_id === person.id && e.exercise === exercise.id && e.equipment)
+      .filter((e) => e.person_id === person.id && e.exercise === exercise.id && options.includes(e.equipment))
       .sort((a, b) => b.id - a.id)[0];
-    return previous?.equipment ?? 'barbell';
+    return previous?.equipment ?? options[0] ?? null;
   });
   const isDumbbell = hasEquipment && equipment === 'dumbbell';
 
@@ -84,16 +116,19 @@ export default function AddEntryDialog({
   // What this person did last time (before the chosen date), so they know what to beat. Each
   // set row shows the same-numbered set from then, and its boxes use those numbers as hints.
   const last = useMemo(
-    () => lastSession(entries, person.id, exercise.id, date, isRunning ? runType : null),
-    [entries, person.id, exercise.id, date, isRunning, runType],
+    () => (isScore ? null : lastSession(entries, person.id, exercise.id, date, isRunning ? runType : null)),
+    [entries, person.id, exercise.id, date, isRunning, runType, isScore],
   );
   const lastSet = (n) => last?.rows.find((r) => r.set_number === n) ?? null;
-  const setText = (r) => (r.weight === null ? `${r.reps} reps` : `${r.weight} kg × ${r.reps}${r.equipment === 'dumbbell' ? ' DB' : ''}`);
+  const setText = (r) => (r.weight === null ? `${r.reps} reps` : `${r.weight} kg × ${r.reps}${equipmentTag(r.equipment)}`);
+  const myScores = vo2max.filter((v) => v.person_id === person.id).sort((a, b) => (a.date < b.date ? 1 : -1));
+  const scoreOnDate = myScores.find((v) => v.date === date) ?? null;
+  const lastScore = myScores.find((v) => v.date < date) ?? null;
   // One day's sets as text, for "last time" and the full history.
   const dayText = (rows) => {
     if (isCardio) return rows.map((r) => cardioText(r.duration_min, r.speed_kmh, r.incline_pct)).join('; ');
     if (isSwimming) return rows.map((r) => swimText({ distanceKm: r.distance_km, seconds: r.duration_sec, lengths: r.lengths })).join(', ');
-    if (isRunning) return rows.map((r) => `${r.run_type}: ${runText({ distanceKm: r.distance_km, seconds: r.duration_sec })}`).join(', ');
+    if (isRunning) return rows.map((r) => `${RUN_TYPE_LABELS[r.run_type] ?? r.run_type}: ${runText({ distanceKm: r.distance_km, seconds: r.duration_sec })}`).join(', ');
     return rows.map(setText).join(', ');
   };
   const lastSummary = last ? dayText(last.rows) : null;
@@ -111,8 +146,6 @@ export default function AddEntryDialog({
       setNoteState('');
     }
   }
-  // Weights: only the last few sets count toward Total. Reps-only: every set counts.
-  const countedIds = new Set((repsOnly ? logged : logged.slice(-COUNTED_SETS)).map((r) => r.id));
   const cardioDone = isCardio && logged.length > 0;
 
   const closeDialog = () => dialogRef.current?.close();
@@ -136,13 +169,50 @@ export default function AddEntryDialog({
 
   function changeRunType(next) {
     setRunType(next);
-    // Easy and tempo are one run; keep only the first row when leaving intervals.
-    if (next !== 'intervals') setRuns((prev) => prev.slice(0, 1));
+    // Easy and tempo are one run; keep only the first row when leaving a multi-rep type.
+    if (!MULTI_RUN_TYPES.includes(next)) setRuns((prev) => prev.slice(0, 1));
+  }
+
+  // A run row's distance and time in seconds, worked out from the pace if entered that way,
+  // or null if either is missing or not valid.
+  function runValues(r) {
+    const distanceKm = Number(r.km);
+    const boxes = boxSeconds(r.min, r.sec);
+    if (r.km === '' || !(distanceKm > 0) || !boxes) return null;
+    const seconds = byPace ? Math.round(boxes * distanceKm) : boxes;
+    return seconds >= 1 ? { distanceKm, seconds } : null;
+  }
+
+  async function removeScore() {
+    setError('');
+    try {
+      await onDeleteVo2max(date);
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   async function submit(event) {
     event.preventDefault();
     setError('');
+
+    if (isScore) {
+      const value = Number(score);
+      if (score === '' || !(value >= MIN_VO2MAX && value <= MAX_VO2MAX)) {
+        setError(`Enter a VO2 max between ${MIN_VO2MAX} and ${MAX_VO2MAX}.`);
+        return;
+      }
+      setBusy(true);
+      try {
+        await onLogVo2max(date, value);
+        if (noteChanged && onSaveNote) await onSaveNote(noteText.trim());
+        closeDialog();
+      } catch (err) {
+        setError(err.message);
+        setBusy(false);
+      }
+      return;
+    }
 
     let payload;
     if (isCardio) {
@@ -188,26 +258,25 @@ export default function AddEntryDialog({
       payload = { personId: person.id, exercise: exercise.id, date, runType: 'easy', runs: [{ distanceKm, seconds, lengths }] };
     } else if (isRunning) {
       const parsed = [];
+      const what = byPace ? 'pace' : 'time';
       for (let i = 0; i < runs.length; i++) {
         const { km, min, sec } = runs[i];
-        const fail = (text) => setError(isIntervals ? `Interval ${i + 1}: ${text}` : text[0].toUpperCase() + text.slice(1));
-        const distanceKm = Number(km);
-        if (km === '' || !(distanceKm > 0)) {
+        const fail = (text) => setError(isMulti ? `${rowName(i)}: ${text}` : text[0].toUpperCase() + text.slice(1));
+        if (km === '' || !(Number(km) > 0)) {
           fail('enter the distance in km.');
           return;
         }
-        const minutesPart = min === '' ? 0 : Number(min);
-        const secondsPart = sec === '' ? 0 : Number(sec);
-        if (!Number.isInteger(minutesPart) || minutesPart < 0 || !Number.isInteger(secondsPart) || secondsPart < 0 || secondsPart > 59) {
-          fail('enter the time as whole minutes and 0 to 59 seconds.');
+        const boxes = boxSeconds(min, sec);
+        if (boxes === null) {
+          fail(`enter the ${what} as whole minutes and 0 to 59 seconds.`);
           return;
         }
-        const seconds = minutesPart * 60 + secondsPart;
-        if (seconds < 1) {
-          fail('enter the time it took.');
+        const values = runValues(runs[i]);
+        if (!values) {
+          fail(byPace ? 'enter the pace.' : 'enter the time it took.');
           return;
         }
-        parsed.push({ distanceKm, seconds });
+        parsed.push(values);
       }
       payload = { personId: person.id, exercise: exercise.id, date, runType, runs: parsed };
     } else {
@@ -223,6 +292,10 @@ export default function AddEntryDialog({
         }
         if (!noWeight && (Number(weight) < MIN_WEIGHT || Number(weight) > MAX_WEIGHT)) {
           setError(`${label}: weight must be between ${MIN_WEIGHT} and ${MAX_WEIGHT} kg.`);
+          return;
+        }
+        if (!noWeight && Math.abs(Number(weight) * 100 - Math.round(Number(weight) * 100)) > 1e-6) {
+          setError(`${label}: use at most 2 decimal places, e.g. 1.25 kg.`);
           return;
         }
         if (reps === '' || !Number.isInteger(Number(reps)) || Number(reps) < 1) {
@@ -263,7 +336,8 @@ export default function AddEntryDialog({
   let submitLabel;
   if (isCardio) submitLabel = 'Save cardio';
   else if (isSwimming) submitLabel = 'Save swim';
-  else if (isRunning) submitLabel = isIntervals ? `Save ${runs.length} ${runs.length === 1 ? 'interval' : 'intervals'}` : 'Save run';
+  else if (isScore) submitLabel = 'Save VO2 max';
+  else if (isRunning) submitLabel = isMulti ? `Save ${runs.length} ${rowLabel.toLowerCase()}${runs.length === 1 ? '' : 's'}` : 'Save run';
   else submitLabel = `Save ${sets.length} ${sets.length === 1 ? 'set' : 'sets'}`;
 
   return (
@@ -309,6 +383,13 @@ export default function AddEntryDialog({
           </p>
         )}
 
+        {isScore && lastScore && (
+          <p className="last-time">
+            <span className="last-time-label">Last time · {dayLabel(lastScore.date)}</span>
+            VO2 max {lastScore.value}
+          </p>
+        )}
+
         {lastSummary && (
           <p className="last-time">
             <span className="last-time-label">Last time · {dayLabel(last.date)}</span>
@@ -316,7 +397,7 @@ export default function AddEntryDialog({
           </p>
         )}
 
-        {history.length > 0 && (
+        {!isScore && history.length > 0 && (
           <div className="history">
             <button type="button" className="text-btn" aria-expanded={showHistory} onClick={() => setShowHistory((v) => !v)}>
               {showHistory ? 'Hide history' : `Show all history (${history.length} ${history.length === 1 ? 'day' : 'days'})`}
@@ -337,26 +418,12 @@ export default function AddEntryDialog({
         {hasEquipment && (
           <fieldset className="equipment" disabled={busy}>
             <legend>Equipment</legend>
-            <label>
-              <input
-                type="radio"
-                name="equipment"
-                value="barbell"
-                checked={equipment === 'barbell'}
-                onChange={() => setEquipment('barbell')}
-              />
-              Barbell
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="equipment"
-                value="dumbbell"
-                checked={equipment === 'dumbbell'}
-                onChange={() => setEquipment('dumbbell')}
-              />
-              Dumbbell
-            </label>
+            {options.map((o) => (
+              <label key={o}>
+                <input type="radio" name="equipment" value={o} checked={equipment === o} onChange={() => setEquipment(o)} />
+                {EQUIPMENT_LABELS[o]}
+              </label>
+            ))}
             {isDumbbell && <p className="hint">Enter the weight of one dumbbell.</p>}
           </fieldset>
         )}
@@ -365,13 +432,39 @@ export default function AddEntryDialog({
           <fieldset className="runs" disabled={busy}>
             <legend>Run type</legend>
             <div className="equipment run-types">
-              {RUN_TYPES.map((t) => (
+              {runChoices.map((t) => (
                 <label key={t}>
                   <input type="radio" name="runType" value={t} checked={runType === t} onChange={() => changeRunType(t)} />
-                  {RUN_TYPE_LABELS[t]}
+                  {t === SCORE ? 'VO2 max score' : RUN_TYPE_LABELS[t]}
                 </label>
               ))}
             </div>
+
+            {isScore ? (
+              <label className="field">
+                VO2 max (ml/kg/min)
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={MIN_VO2MAX}
+                  max={MAX_VO2MAX}
+                  step="0.1"
+                  placeholder={lastScore ? String(lastScore.value) : '48'}
+                  value={score}
+                  onChange={(e) => setScore(e.target.value)}
+                />
+                <span className="hint">The estimate from your watch. One per day: saving again replaces it.</span>
+              </label>
+            ) : (
+              <div className="segmented run-entry" role="group" aria-label="Enter each run as">
+                <button type="button" aria-pressed={!byPace} onClick={() => setByPace(false)}>
+                  Time
+                </button>
+                <button type="button" aria-pressed={byPace} onClick={() => setByPace(true)}>
+                  Pace /km
+                </button>
+              </div>
+            )}
 
             {runType === 'tempo' && (
               <div className="quick-distances">
@@ -384,9 +477,20 @@ export default function AddEntryDialog({
               </div>
             )}
 
-            {runs.map((r, i) => (
+            {!isScore && runs.map((r, i) => {
+              const values = runValues(r);
+              let worked = null;
+              if (values) {
+                worked = byPace
+                  ? `Time ${formatDuration(values.seconds)}`
+                  : formatPace(runPace(values.seconds, values.distanceKm));
+              }
+              return (
               <div className="run-row" key={i}>
-                <span className="set-label">{isIntervals ? `Interval ${i + 1}` : 'Run'}</span>
+                <span className="set-label">
+                  {rowName(i)}
+                  {worked && <small className="last-hint">{worked}</small>}
+                </span>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -394,7 +498,7 @@ export default function AddEntryDialog({
                   max="200"
                   step="0.01"
                   placeholder="km"
-                  aria-label={`${isIntervals ? `Interval ${i + 1}` : 'Run'} distance in km`}
+                  aria-label={`${rowName(i)} distance in km`}
                   value={r.km}
                   onChange={(e) => updateRun(i, { km: e.target.value })}
                 />
@@ -404,7 +508,7 @@ export default function AddEntryDialog({
                   min="0"
                   step="1"
                   placeholder="min"
-                  aria-label={`${isIntervals ? `Interval ${i + 1}` : 'Run'} time, minutes`}
+                  aria-label={`${rowName(i)} ${byPace ? 'pace per km' : 'time'}, minutes`}
                   value={r.min}
                   onChange={(e) => updateRun(i, { min: e.target.value })}
                 />
@@ -418,15 +522,15 @@ export default function AddEntryDialog({
                   max="59"
                   step="1"
                   placeholder="sec"
-                  aria-label={`${isIntervals ? `Interval ${i + 1}` : 'Run'} time, seconds`}
+                  aria-label={`${rowName(i)} ${byPace ? 'pace per km' : 'time'}, seconds`}
                   value={r.sec}
                   onChange={(e) => updateRun(i, { sec: e.target.value })}
                 />
-                {isIntervals && (
+                {isMulti && (
                   <button
                     type="button"
                     className="icon-btn"
-                    aria-label={`Remove interval ${i + 1}`}
+                    aria-label={`Remove ${rowName(i).toLowerCase()}`}
                     disabled={runs.length === 1}
                     onClick={() => setRuns((prev) => prev.filter((_, j) => j !== i))}
                   >
@@ -434,21 +538,23 @@ export default function AddEntryDialog({
                   </button>
                 )}
               </div>
-            ))}
-            {isIntervals && (
+              );
+            })}
+            {isMulti && (
               <button
                 type="button"
                 className="text-btn"
                 disabled={runs.length >= MAX_SETS_PER_ENTRY}
                 onClick={() => setRuns((prev) => [...prev, { ...prev[prev.length - 1] }])}
               >
-                Add another interval
+                Add another {rowLabel.toLowerCase()}
               </button>
             )}
             <p className="hint">
               {runType === 'easy' && 'Easy runs are charted by distance.'}
               {runType === 'tempo' && 'Tempo runs are charted by pace, at 5K, 10K or all distances.'}
-              {isIntervals && 'Enter each interval’s distance and time. Charted by average pace.'}
+              {isMulti && `Enter each ${rowLabel.toLowerCase()}’s distance and ${byPace ? 'pace' : 'time'}, leaving out rests. Charted by average pace.`}
+              {isScore && 'Charted on the Running tile under VO2 max score.'}
             </p>
           </fieldset>
         )}
@@ -553,7 +659,7 @@ export default function AddEntryDialog({
                     inputMode="decimal"
                     min={MIN_WEIGHT}
                     max={MAX_WEIGHT}
-                    step="0.5"
+                    step={WEIGHT_STEP}
                     placeholder={before?.weight != null ? String(before.weight) : repsOnly ? '+kg' : isDumbbell ? 'kg each' : 'kg'}
                     aria-label={`Set ${n} weight in kilograms${repsOnly ? ', optional, for weighted sets' : isDumbbell ? ', per dumbbell' : ''}`}
                     value={s.weight}
@@ -591,13 +697,27 @@ export default function AddEntryDialog({
             <p className="hint">
               {repsOnly
                 ? 'Every set of the day counts toward the total. Weight is optional: fill it in for weighted sets, e.g. 10 for a 10 kg belt.'
-                : `Only the last ${COUNTED_SETS} sets of the day count toward the chart.`}
+                : 'Every set of the day counts toward the total. Weights can have 2 decimal places, e.g. 1.25.'}
               {!repsOnly && ' Assisted? Enter the assistance as a minus weight, e.g. -20.'}
             </p>
           </fieldset>
         )}
 
-        {logged.length > 0 && (
+        {isScore && scoreOnDate && (
+          <section aria-label="VO2 max already logged on this date">
+            <h3>Already logged on this date</h3>
+            <ul className="logged">
+              <li>
+                <span>VO2 max {scoreOnDate.value}</span>
+                <button type="button" className="text-btn danger" onClick={removeScore}>
+                  Delete
+                </button>
+              </li>
+            </ul>
+          </section>
+        )}
+
+        {!isScore && logged.length > 0 && (
           <section aria-label="Already logged on this date">
             <h3>Already logged on this date</h3>
             <ul className="logged">
@@ -614,7 +734,6 @@ export default function AddEntryDialog({
                           ? `Set ${row.set_number}: ${row.reps} reps`
                           : `Set ${row.set_number}: ${row.weight} kg × ${row.reps}${row.equipment ? `, ${row.equipment}` : ''}`}
                   </span>
-                  {!isCardio && !isRunning && !isSwimming && countedIds.has(row.id) && <span className="tag">counts</span>}
                   <button type="button" className="text-btn danger" onClick={() => remove(row)}>
                     Delete
                   </button>

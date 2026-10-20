@@ -44,15 +44,15 @@ export default route({
   // Strength: { personId, exercise, date, equipment?, sets: [{ weight, reps }] }
   //   Reps-only exercises send sets: [{ reps }] and store a null weight.
   //   Set numbers continue from whatever that person already logged that day.
-  //   equipment ('barbell' | 'dumbbell') is required for exercises that offer the choice.
+  //   equipment ('barbell' | 'dumbbell' | 'cable') is required for exercises that offer a choice.
   // Cardio:   { personId, exercise: 'cardio', date, durationMin, speedKmh, inclinePct }
   // Running:  { personId, exercise: 'running', date, runType, runs: [{ distanceKm, seconds }] }
-  //   One run for easy and tempo, one per interval for intervals. Numbered like sets.
+  //   One run for easy and tempo, one per rep for intervals, VO2 max and hills. Numbered like sets.
   // Swimming: { personId, exercise: 'swimming', date, runType: 'easy', runs: [{ distanceKm, seconds, lengths }] }
   //   One swim at a time; lengths is the number of pool lengths that distanceKm came from.
   async POST(req) {
     const sql = db();
-    const exercises = await sql`select id, kind, equipment_choice from exercises`;
+    const exercises = await sql`select id, kind, equipment_choice, equipment_options from exercises`;
     const entry = parseNewEntry(req.body, exercises);
     await assertMember(sql, req.group.id, entry.personId);
     try {

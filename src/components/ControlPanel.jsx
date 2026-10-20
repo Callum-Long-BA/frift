@@ -6,8 +6,8 @@ const NEW_PERSON = 'new';
 
 // [value, short label, full description for the hover title]
 const MODE_OPTIONS = [
-  ['total', 'Total', 'Total weight: last 3 sets, weight × reps'],
-  ['pct', '% change', '% change in best set weight since first log'],
+  ['total', 'Total', 'Total weight: every set, weight × reps'],
+  ['pct', '% change', '% change in best set weight since your first recent log (a break of over 4 months starts it afresh)'],
   ['best', 'Best set', 'Heaviest set of the day'],
   ['bw', '× BW', 'Best set as a multiple of body weight'],
 ];

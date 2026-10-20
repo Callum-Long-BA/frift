@@ -96,15 +96,30 @@ export function suggestRoutines(entries, exercises, personId, today, routines = 
   return suggestions;
 }
 
-// The routine (of `routines`, one person's own) that a day's exercises most look like, or
-// null if none is alike enough (the same test as grouping days for suggestions).
+// How much of a routine a session has to include to count as that routine, and how many
+// exercises outside it are allowed. Doing 5 of 5 plus a couple of extras, or 3 of 5 plus 2
+// swapped in for the day, both count.
+const ROUTINE_COVERED = 0.6;
+const ROUTINE_EXTRAS = 3;
+
+// The routine (of `routines`, one person's own) that a day's exercises most likely were:
+// the one with the largest share of its exercises done (at least ROUTINE_COVERED, and at
+// least 2 unless it only has 1), with no more than ROUTINE_EXTRAS exercises beyond it.
+// Ties go to the routine with fewer extras. null if none fits.
 export function matchRoutine(exerciseIds, routines) {
   const done = new Set(exerciseIds);
   let best = null;
-  let bestScore = SAME_DAY_TYPE;
+  let bestScore = -1;
   for (const r of routines) {
-    const score = similarity(done, new Set(r.exercise_ids));
-    if (score >= bestScore) {
+    const ids = new Set(r.exercise_ids);
+    if (ids.size === 0) continue;
+    let both = 0;
+    for (const id of ids) if (done.has(id)) both += 1;
+    const covered = both / ids.size;
+    const extras = done.size - both;
+    if (covered < ROUTINE_COVERED || both < Math.min(2, ids.size) || extras > ROUTINE_EXTRAS) continue;
+    const score = covered - extras / 100;
+    if (score > bestScore) {
       best = r;
       bestScore = score;
     }

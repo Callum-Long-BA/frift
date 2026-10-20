@@ -1,4 +1,7 @@
+import { useState } from 'react';
+import { MUSCLE_GROUPS, equipmentTag } from '../lib/constants.js';
 import { dayLabel, lastSession, todayString } from '../lib/metrics.js';
+import { readStored, writeStored } from '../lib/storage.js';
 import { cardioText } from './CardioChart.jsx';
 import { runText } from './RunningChart.jsx';
 import { swimText } from './SwimmingChart.jsx';
@@ -10,12 +13,20 @@ function setsText(exercise, rows) {
     return rows.map((r) => swimText({ distanceKm: r.distance_km, seconds: r.duration_sec, lengths: r.lengths })).join(', ');
   if (exercise.kind === 'running') return rows.map((r) => runText({ distanceKm: r.distance_km, seconds: r.duration_sec })).join(', ');
   if (exercise.kind === 'reps') return `${rows.map((r) => (r.weight == null ? r.reps : `${r.weight}×${r.reps}`)).join(', ')} reps`;
-  return rows.map((r) => `${r.weight}×${r.reps}${r.equipment === 'dumbbell' ? ' DB' : ''}`).join(', ');
+  return rows.map((r) => `${r.weight}×${r.reps}${equipmentTag(r.equipment)}`).join(', ');
 }
+
+const FILTER_KEY = 'frift.mobileFilter';
+
+// Which filter an exercise falls under: its muscle group, 'other' for a weight exercise
+// without one, or 'cc' for cardio, running and reps-only exercises.
+const filterOf = (e) => (e.kind !== 'strength' ? 'cc' : e.muscle_group ?? 'other');
 
 // The simple phone view: 1) who are you, 2) which routine, 3) log each of its exercises.
 // Each exercise shows what you have logged today, or else what you did last time, and a big
-// Log button that opens the usual log dialog. "Full view" switches to the whole board.
+// Log button that opens the usual log dialog. Exercises logged today move to the top. With
+// no routine chosen, filter buttons narrow the list to one muscle group (or cardio and
+// calisthenics). "Full view" switches to the whole board.
 export default function MobileLog({
   people,
   me,
@@ -36,6 +47,35 @@ export default function MobileLog({
 }) {
   const today = todayString();
   const mine = me ? routines.filter((r) => r.person_id === me.id) : [];
+  const [filter, setFilter] = useState(() => readStored(FILTER_KEY) || 'all');
+  function changeFilter(next) {
+    setFilter(next);
+    writeStored(FILTER_KEY, next);
+  }
+
+  // Only the filters that have exercises, in the full view's order.
+  const filters = [
+    { key: 'all', label: 'All' },
+    ...MUSCLE_GROUPS.filter((g) => exercises.some((e) => filterOf(e) === g.key)),
+    ...(exercises.some((e) => filterOf(e) === 'other') ? [{ key: 'other', label: 'Other' }] : []),
+    ...(exercises.some((e) => filterOf(e) === 'cc') ? [{ key: 'cc', label: 'Cardio & calisthenics' }] : []),
+  ];
+  const activeFilter = !activeRoutine && filters.some((f) => f.key === filter) ? filter : 'all';
+
+  // Each exercise with today's sets (or else last time's), those done today first. sort is
+  // stable, so each half keeps the page's order.
+  const items = me
+    ? exercises
+        .filter((e) => activeFilter === 'all' || filterOf(e) === activeFilter)
+        .map((exercise) => {
+          const todayRows = entries
+            .filter((e) => e.person_id === me.id && e.exercise === exercise.id && e.date === today)
+            .sort((a, b) => a.set_number - b.set_number);
+          const last = todayRows.length === 0 ? lastSession(entries, me.id, exercise.id, today) : null;
+          return { exercise, todayRows, last };
+        })
+        .sort((a, b) => Number(b.todayRows.length > 0) - Number(a.todayRows.length > 0))
+    : [];
 
   return (
     <div className="mobile-log">
@@ -108,12 +148,17 @@ export default function MobileLog({
             <span className="step-no">3</span> Log {activeRoutine ? activeRoutine.name : 'an exercise'}
           </h2>
           {status === 'loading' && exercises.length === 0 && <p className="hint">Loading…</p>}
+          {!activeRoutine && filters.length > 2 && (
+            <div className="mobile-filters" role="group" aria-label="Show exercises for">
+              {filters.map((f) => (
+                <button key={f.key} type="button" className="chip" aria-pressed={activeFilter === f.key} onClick={() => changeFilter(f.key)}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
           <ul className="mobile-exercises">
-            {exercises.map((exercise) => {
-              const todayRows = entries
-                .filter((e) => e.person_id === me.id && e.exercise === exercise.id && e.date === today)
-                .sort((a, b) => a.set_number - b.set_number);
-              const last = todayRows.length === 0 ? lastSession(entries, me.id, exercise.id, today) : null;
+            {items.map(({ exercise, todayRows, last }) => {
               const note = noteFor(exercise.id);
               return (
                 <li key={exercise.id} className={todayRows.length > 0 ? 'mobile-exercise is-done' : 'mobile-exercise'}>
