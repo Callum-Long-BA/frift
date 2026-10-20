@@ -34,6 +34,10 @@ export default route({
              distance_km::float8 as distance_km,
              duration_sec,
              lengths,
+             stroke,
+             avg_hr,
+             max_hr,
+             swolf,
              speed_kmh::float8 as speed_kmh,
              incline_pct::float8 as incline_pct
       from entries
@@ -48,8 +52,10 @@ export default route({
   // Cardio:   { personId, exercise: 'cardio', date, durationMin, speedKmh, inclinePct }
   // Running:  { personId, exercise: 'running', date, runType, runs: [{ distanceKm, seconds }] }
   //   One run for easy and tempo, one per rep for intervals, VO2 max and hills. Numbered like sets.
-  // Swimming: { personId, exercise: 'swimming', date, runType: 'easy', runs: [{ distanceKm, seconds, lengths }] }
-  //   One swim at a time; lengths is the number of pool lengths that distanceKm came from.
+  // Swimming: { personId, exercise: 'swimming', date, runs: [{ distanceKm, seconds, lengths }],
+  //             swim?: { stroke, avgHr, maxHr, swolf } }
+  //   One or more sets; lengths is the number of pool lengths that distanceKm came from. The
+  //   optional swim details are stored on every set saved with them.
   async POST(req) {
     const sql = db();
     const exercises = await sql`select id, kind, equipment_choice, equipment_options from exercises`;
@@ -64,7 +70,7 @@ export default route({
           returning id, person_id, exercise,
                     to_char(entry_date, 'YYYY-MM-DD') as date,
                     set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment,
-                    run_type, distance_km::float8 as distance_km, duration_sec, lengths,
+                    run_type, distance_km::float8 as distance_km, duration_sec, lengths, stroke, avg_hr, max_hr, swolf,
                     speed_kmh::float8 as speed_kmh, incline_pct::float8 as incline_pct`;
       }
 
@@ -73,8 +79,10 @@ export default route({
         const distances = entry.runs.map((r) => r.distanceKm);
         const seconds = entry.runs.map((r) => r.seconds);
         const lengths = entry.runs.map((r) => r.lengths);
+        const swim = entry.swim ?? { stroke: null, avgHr: null, maxHr: null, swolf: null };
         return await sql`
-          insert into entries (person_id, exercise, entry_date, set_number, run_type, distance_km, duration_sec, lengths)
+          insert into entries (person_id, exercise, entry_date, set_number, run_type, distance_km, duration_sec, lengths,
+                               stroke, avg_hr, max_hr, swolf)
           select ${entry.personId}::int,
                  ${entry.exercise}::text,
                  ${entry.date}::date,
@@ -85,12 +93,16 @@ export default route({
                  ${entry.runType}::text,
                  s.d,
                  s.t,
-                 s.l
+                 s.l,
+                 ${swim.stroke}::text,
+                 ${swim.avgHr}::int,
+                 ${swim.maxHr}::int,
+                 ${swim.swolf}::int
           from unnest(${numbers}::int[], ${distances}::numeric[], ${seconds}::int[], ${lengths}::int[]) as s(n, d, t, l)
           returning id, person_id, exercise,
                     to_char(entry_date, 'YYYY-MM-DD') as date,
                     set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment,
-                    run_type, distance_km::float8 as distance_km, duration_sec, lengths,
+                    run_type, distance_km::float8 as distance_km, duration_sec, lengths, stroke, avg_hr, max_hr, swolf,
                     speed_kmh::float8 as speed_kmh, incline_pct::float8 as incline_pct`;
       }
 
@@ -115,7 +127,7 @@ export default route({
         returning id, person_id, exercise,
                   to_char(entry_date, 'YYYY-MM-DD') as date,
                   set_number, weight::float8 as weight, reps, duration_min::float8 as duration_min, equipment,
-                    run_type, distance_km::float8 as distance_km, duration_sec, lengths,
+                    run_type, distance_km::float8 as distance_km, duration_sec, lengths, stroke, avg_hr, max_hr, swolf,
                     speed_kmh::float8 as speed_kmh, incline_pct::float8 as incline_pct`;
     } catch (err) {
       throw translateDbError(err, entry);
