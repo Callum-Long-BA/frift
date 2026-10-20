@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { SWIM_VIEWS } from '../lib/constants.js';
+import { SWIM_STROKE_LABELS, SWIM_VIEWS } from '../lib/constants.js';
 import { formatDayLong, formatDuration, formatSwimPace, swimChartData, swimPace } from '../lib/metrics.js';
 import { readStored, writeStored } from '../lib/storage.js';
 import ChartFrame from './ChartFrame.jsx';
@@ -9,20 +9,44 @@ const VIEW_KEY = 'frift.swimView';
 
 const km = (n) => `${Number(n).toLocaleString('en-GB', { maximumFractionDigits: 2 })} km`;
 
-// One swim as text: "20 lengths (0.5 km) in 8:30 (1:42 /100m)". Older swims (or any logged
-// before lengths were saved) show the distance only: "0.5 km in 8:30 (1:42 /100m)".
+// One swim as text: "20 lengths (0.5 km) in 8:30 (1:42 /100m)", then any details recorded:
+// "· Freestyle · HR 142 avg, 165 max · SWOLF 38". Older swims (or any logged before lengths
+// were saved) show the distance only: "0.5 km in 8:30 (1:42 /100m)".
 export const swimText = (r) => {
   const distance = r.lengths ? `${r.lengths} ${r.lengths === 1 ? 'length' : 'lengths'} (${km(r.distanceKm)})` : km(r.distanceKm);
-  return `${distance} in ${formatDuration(r.seconds)} (${formatSwimPace(swimPace(r.seconds, r.distanceKm))})`;
+  const parts = [`${distance} in ${formatDuration(r.seconds)} (${formatSwimPace(swimPace(r.seconds, r.distanceKm))})`];
+  if (r.stroke) parts.push(SWIM_STROKE_LABELS[r.stroke] ?? r.stroke);
+  if (r.avgHr || r.maxHr) parts.push(`HR ${[r.avgHr && `${r.avgHr} avg`, r.maxHr && `${r.maxHr} max`].filter(Boolean).join(', ')}`);
+  if (r.swolf) parts.push(`SWOLF ${r.swolf}`);
+  return parts.join(' · ');
 };
+
+// A swim as stored (an entries row) in the shape swimText takes.
+export const swimOf = (e) => ({
+  distanceKm: e.distance_km,
+  seconds: e.duration_sec,
+  lengths: e.lengths,
+  stroke: e.stroke,
+  avgHr: e.avg_hr,
+  maxHr: e.max_hr,
+  swolf: e.swolf,
+});
+
+// What a chart value means in each view, for the hover card.
+function viewValue(view, value) {
+  if (view === 'distance') return km(value);
+  if (view === 'pace') return formatSwimPace(value);
+  if (view === 'hr') return `${value} bpm`;
+  return `SWOLF ${value}`;
+}
 
 // Hover card: each person's value for that day, and every swim behind it.
 function SwimTooltip({ active, payload, label, view }) {
   if (!active || !payload?.length) return null;
   const items = payload.filter((p) => p.value !== null && p.value !== undefined);
   if (items.length === 0) return null;
-  // Best first: furthest for distance, fastest pace for pace.
-  items.sort((a, b) => (view === 'distance' ? b.value - a.value : a.value - b.value));
+  // Best first: furthest for distance; lowest for pace and SWOLF; heart rate highest first.
+  items.sort((a, b) => (view === 'distance' || view === 'hr' ? b.value - a.value : a.value - b.value));
 
   return (
     <div className="tip">
@@ -35,12 +59,13 @@ function SwimTooltip({ active, payload, label, view }) {
               <div className="tip-line">
                 <span className="swatch" style={{ background: item.color ?? item.stroke }} aria-hidden="true" />
                 <span className="tip-name">{item.name}</span>
-                <span className="tip-value">{view === 'distance' ? km(item.value) : formatSwimPace(item.value)}</span>
+                <span className="tip-value">{viewValue(view, item.value)}</span>
               </div>
               <p className="tip-sets">
                 {swims.map((s, i) => (
                   <span key={s.setNumber} className="tip-set is-counted">
                     {i > 0 && <br />}
+                    {swims.length > 1 && `${i + 1}. `}
                     {swimText(s)}
                   </span>
                 ))}
@@ -54,8 +79,9 @@ function SwimTooltip({ active, payload, label, view }) {
 }
 
 // The Swimming tile. Unlike Running, there is nothing to pick between when logging (every
-// swim counts), so a simple toggle switches the chart between the day's total distance and
-// its average pace. The choice is remembered in this browser. The + button logs a swim.
+// swim counts), so a toggle switches the chart between the day's total distance, average
+// pace, average heart rate and SWOLF (the last two only from swims that recorded them). The
+// choice is remembered in this browser. The + button logs a swim.
 export default function SwimmingChart({ exercise, people, entries, me, loading, onAdd, axisStart }) {
   const [view, setView] = useState(() => {
     const stored = readStored(VIEW_KEY);
@@ -71,7 +97,10 @@ export default function SwimmingChart({ exercise, people, entries, me, loading, 
 
   let emptyText;
   if (loading) emptyText = 'Loading…';
-  else if (me) emptyText = 'No swims yet. Tap + to log one.';
+  else if (view === 'hr' || view === 'swolf') {
+    const what = view === 'hr' ? 'heart rate' : 'SWOLF';
+    emptyText = me ? `No swims with ${what} yet. Add it when you log a swim.` : `No swims with ${what} yet.`;
+  } else if (me) emptyText = 'No swims yet. Tap + to log one.';
   else emptyText = 'No swims yet. Choose who you are to log one.';
 
   const controls = (
@@ -103,8 +132,8 @@ export default function SwimmingChart({ exercise, people, entries, me, loading, 
           me={me}
           full={full}
           emptyText={emptyText}
-          reversed={view === 'pace'}
-          yDomain={view === 'pace' ? ['auto', 'auto'] : undefined}
+          reversed={view === 'pace' || view === 'swolf'}
+          yDomain={view === 'distance' ? undefined : ['auto', 'auto']}
           yTickFormatter={view === 'pace' ? (v) => formatDuration(v) : (v) => `${v}`}
           tooltip={<SwimTooltip view={view} />}
         />

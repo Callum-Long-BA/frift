@@ -1493,6 +1493,19 @@ fieldset {
   gap: 8px;
 }
 
+/* Swimming: the optional watch details, two to a row. */
+.swim-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+  margin-top: 4px;
+}
+
+.swim-details-title {
+  grid-column: 1 / -1;
+  font-weight: 500;
+}
+
 .quick-distances {
   display: flex;
   align-items: center;

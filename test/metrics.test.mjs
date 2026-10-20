@@ -628,6 +628,19 @@ test('swimChartData: pace view averages the day\'s total time over total distanc
   assert.equal(rows[0][seriesKey(1)], 90); // 900s over 1km = 900 s/km = 90 s/100m
 });
 
+test('swimChartData: heart rate is time-weighted, SWOLF length-weighted, days without them left out', () => {
+  const entries = [
+    { ...swimRow(1, '2026-09-01', 1, 0.1, 100, 4), avg_hr: 150, swolf: 40 },
+    { ...swimRow(1, '2026-09-01', 2, 0.2, 300, 8), avg_hr: 130, swolf: 34 },
+    swimRow(1, '2026-09-02', 1, 0.5, 600, 20),
+  ];
+  const hr = swimChartData(entries, 'hr');
+  assert.deepEqual(hr.rows.map((r) => [r.date, r[seriesKey(1)]]), [['2026-09-01', 135]]); // (150×100 + 130×300) / 400
+  assert.equal(hr.rows[0].detail[seriesKey(1)][0].avgHr, 150);
+  assert.deepEqual(swimChartData(entries, 'swolf').rows.map((r) => r[seriesKey(1)]), [36]); // (40×4 + 34×8) / 12
+  assert.equal(swimChartData(entries, 'distance').rows.length, 2);
+});
+
 test('swimChartData: a swim logged before lengths were saved still counts, with lengths null', () => {
   const entries = [swimRow(1, '2026-09-01', 1, 0.5, 600, null)];
   const { rows } = swimChartData(entries, 'distance');

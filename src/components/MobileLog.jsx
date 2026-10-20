@@ -4,13 +4,13 @@ import { dayLabel, lastSession, todayString } from '../lib/metrics.js';
 import { readStored, writeStored } from '../lib/storage.js';
 import { cardioText } from './CardioChart.jsx';
 import { runText } from './RunningChart.jsx';
-import { swimText } from './SwimmingChart.jsx';
+import { swimOf, swimText } from './SwimmingChart.jsx';
 
 // One line of sets as text: "60×8, 62.5×6", "12, 10 reps", or a cardio session, run or swim.
 function setsText(exercise, rows) {
   if (exercise.kind === 'cardio') return rows.map((r) => cardioText(r.duration_min, r.speed_kmh, r.incline_pct)).join('; ');
   if (exercise.id === 'swimming')
-    return rows.map((r) => swimText({ distanceKm: r.distance_km, seconds: r.duration_sec, lengths: r.lengths })).join(', ');
+    return rows.map((r) => swimText(swimOf(r))).join(', ');
   if (exercise.kind === 'running') return rows.map((r) => runText({ distanceKm: r.distance_km, seconds: r.duration_sec })).join(', ');
   if (exercise.kind === 'reps') return `${rows.map((r) => (r.weight == null ? r.reps : `${r.weight}×${r.reps}`)).join(', ')} reps`;
   return rows.map((r) => `${r.weight}×${r.reps}${equipmentTag(r.equipment)}`).join(', ');

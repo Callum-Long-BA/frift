@@ -551,13 +551,29 @@ export function swimPace(seconds, km) {
 
 export const formatSwimPace = (secondsPer100m) => `${formatDuration(secondsPer100m)} /100m`;
 
+// The average of `field` over the rows that have it, each weighted by weightOf(row), rounded
+// to a whole number; null if no row has it.
+function weightedAverage(rows, field, weightOf) {
+  let total = 0;
+  let weight = 0;
+  for (const r of rows) {
+    if (r[field] === null || r[field] === undefined) continue;
+    total += r[field] * weightOf(r);
+    weight += weightOf(r);
+  }
+  return weight > 0 ? Math.round(total / weight) : null;
+}
+
 // Chart rows for the Swimming tile, in the same shape as buildChartData. Swimming has no
-// types to pick between (every swim counts), so there are only two views:
+// types to pick between (every swim counts); the views (SWIM_VIEWS) are:
 //   distance: the day's total distance, km (lengths × each person's pool length).
 //   pace:     the day's average pace across every swim: total time / total distance,
 //             seconds per 100m.
-// detail[p<id>] lists that day's swims: [{ setNumber, distanceKm, seconds, lengths }].
-// `lengths` is null for a swim logged before lengths were saved.
+//   hr:       the day's average heart rate, weighted by time, from swims that recorded one.
+//   swolf:    the day's SWOLF, weighted by lengths, from swims that recorded one.
+// Days with nothing recorded for hr or swolf are left out of those views.
+// detail[p<id>] lists that day's swims: [{ setNumber, distanceKm, seconds, lengths, stroke,
+// avgHr, maxHr, swolf }]. `lengths` is null for a swim logged before lengths were saved.
 export function swimChartData(entries, view = 'distance') {
   const groups = new Map();
   for (const e of entries) {
@@ -575,8 +591,22 @@ export function swimChartData(entries, view = 'distance') {
     swims.sort((a, b) => a.set_number - b.set_number);
     const km = swims.reduce((sum, s) => sum + s.distance_km, 0);
     const seconds = swims.reduce((sum, s) => sum + s.duration_sec, 0);
-    const value = view === 'pace' ? swimPace(seconds, km) : Math.round(km * 100) / 100;
-    const detail = swims.map((s) => ({ setNumber: s.set_number, distanceKm: s.distance_km, seconds: s.duration_sec, lengths: s.lengths ?? null }));
+    let value;
+    if (view === 'pace') value = swimPace(seconds, km);
+    else if (view === 'hr') value = weightedAverage(swims, 'avg_hr', (s) => s.duration_sec);
+    else if (view === 'swolf') value = weightedAverage(swims, 'swolf', (s) => s.lengths ?? 1);
+    else value = Math.round(km * 100) / 100;
+    if (value === null) continue;
+    const detail = swims.map((s) => ({
+      setNumber: s.set_number,
+      distanceKm: s.distance_km,
+      seconds: s.duration_sec,
+      lengths: s.lengths ?? null,
+      stroke: s.stroke ?? null,
+      avgHr: s.avg_hr ?? null,
+      maxHr: s.max_hr ?? null,
+      swolf: s.swolf ?? null,
+    }));
     if (!perPerson.has(id)) perPerson.set(id, new Map());
     perPerson.get(id).set(date, { value, detail });
     allDates.add(date);
