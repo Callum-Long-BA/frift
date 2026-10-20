@@ -55,12 +55,12 @@ function RunTooltip({ active, payload, label, runType }) {
   );
 }
 
-function subtitleFor(runType, tempoDistance, noun) {
+function subtitleFor(runType, tempoDistance) {
   if (runType === SCORE) return 'VO2 max score, ml/kg/min';
-  if (runType === 'easy') return `Easy ${noun}s, distance per day, km`;
+  if (runType === 'easy') return 'Easy runs, distance per day, km';
   if (runType !== 'tempo') return `${RUN_TYPE_LABELS[runType]}, average pace per session. Higher is faster`;
   const label = TEMPO_DISTANCES.find((d) => d.key === tempoDistance)?.label;
-  return `Tempo ${tempoDistance === 'all' ? `${noun}s` : label}, best pace. Higher is faster`;
+  return `Tempo ${tempoDistance === 'all' ? 'runs' : label}, best pace. Higher is faster`;
 }
 
 // The Running tile (and the Swimming tile, which works the same way). A dropdown picks which
@@ -136,7 +136,7 @@ export default function RunningChart({ exercise, people, entries, vo2max = [], m
     <ChartFrame
       headingId={`chart-${exercise.id}`}
       title={exercise.name}
-      subtitle={subtitleFor(runType, tempoDistance, noun)}
+      subtitle={subtitleFor(runType, tempoDistance)}
       controls={controls}
       addLabel={runType === SCORE ? 'Log a VO2 max score' : `Log a ${label} run`}
       canAdd={Boolean(me)}
