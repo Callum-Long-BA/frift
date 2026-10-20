@@ -2,28 +2,47 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import {
   EQUIPMENT_LABELS,
+  MAX_HEART_RATE,
   MAX_LENGTHS_PER_SWIM,
   MAX_POOL_LENGTH_M,
   MAX_SETS_PER_ENTRY,
+  MAX_SWOLF,
   MAX_VO2MAX,
   MAX_WEIGHT,
+  MIN_HEART_RATE,
   MIN_POOL_LENGTH_M,
+  MIN_SWOLF,
   MIN_VO2MAX,
   MIN_WEIGHT,
   MULTI_RUN_TYPES,
   RUN_ROW_LABELS,
   RUN_TYPES,
   RUN_TYPE_LABELS,
+  SWIM_STROKES,
+  SWIM_STROKE_LABELS,
   WEIGHT_STEP,
   equipmentOptions,
   equipmentTag,
 } from '../lib/constants.js';
-import { dayLabel, exerciseHistory, formatDuration, formatPace, lastSession, nextSetNumber, runPace, todayString } from '../lib/metrics.js';
+import {
+  dayLabel,
+  exerciseHistory,
+  formatDuration,
+  formatPace,
+  formatSwimPace,
+  lastSession,
+  nextSetNumber,
+  runPace,
+  swimPace,
+  todayString,
+} from '../lib/metrics.js';
 import { runText } from './RunningChart.jsx';
-import { swimText } from './SwimmingChart.jsx';
+import { swimOf, swimText } from './SwimmingChart.jsx';
 import { cardioText } from './CardioChart.jsx';
 
 const EMPTY_RUN = { km: '', min: '', sec: '' };
+const EMPTY_SWIM = { lengths: '', min: '', sec: '' };
+const EMPTY_SWIM_DETAILS = { stroke: '', avgHr: '', maxHr: '', swolf: '' };
 
 // The Running tile's extra choice in the dialog: a VO2 max score rather than a run.
 const SCORE = 'score';
@@ -86,9 +105,11 @@ export default function AddEntryDialog({
   const [byPace, setByPace] = useState(false);
   const [score, setScore] = useState('');
   const [poolLength, setPoolLength] = useState(() => (person.pool_length_m != null ? String(person.pool_length_m) : ''));
-  const [swimLengths, setSwimLengths] = useState('');
-  const [swimMin, setSwimMin] = useState('');
-  const [swimSec, setSwimSec] = useState('');
+  // Swims are one or more sets (intervals leave the rests out), each lengths and a time or a
+  // pace per 100 m. The optional details apply to every set saved with them.
+  const [swims, setSwims] = useState([EMPTY_SWIM]);
+  const [swimByPace, setSwimByPace] = useState(false);
+  const [swimDetails, setSwimDetails] = useState(EMPTY_SWIM_DETAILS);
 
   // Start on whatever this person used last time for this exercise, else its first option.
   const [equipment, setEquipment] = useState(() => {
@@ -127,7 +148,7 @@ export default function AddEntryDialog({
   // One day's sets as text, for "last time" and the full history.
   const dayText = (rows) => {
     if (isCardio) return rows.map((r) => cardioText(r.duration_min, r.speed_kmh, r.incline_pct)).join('; ');
-    if (isSwimming) return rows.map((r) => swimText({ distanceKm: r.distance_km, seconds: r.duration_sec, lengths: r.lengths })).join(', ');
+    if (isSwimming) return rows.map((r) => swimText(swimOf(r))).join(', ');
     if (isRunning) return rows.map((r) => `${RUN_TYPE_LABELS[r.run_type] ?? r.run_type}: ${runText({ distanceKm: r.distance_km, seconds: r.duration_sec })}`).join(', ');
     return rows.map(setText).join(', ');
   };
@@ -181,6 +202,22 @@ export default function AddEntryDialog({
     if (r.km === '' || !(distanceKm > 0) || !boxes) return null;
     const seconds = byPace ? Math.round(boxes * distanceKm) : boxes;
     return seconds >= 1 ? { distanceKm, seconds } : null;
+  }
+
+  function updateSwim(index, patch) {
+    setSwims((prev) => prev.map((w, i) => (i === index ? { ...w, ...patch } : w)));
+  }
+
+  // One swim set as { distanceKm, seconds, lengths }, the time worked out from the pace if
+  // entered that way, or null if anything is missing or not valid.
+  function swimValues(w) {
+    const poolLengthM = Number(poolLength);
+    const lengths = Number(w.lengths);
+    const boxes = boxSeconds(w.min, w.sec);
+    if (!(poolLengthM > 0) || w.lengths === '' || !Number.isInteger(lengths) || lengths < 1 || !boxes) return null;
+    const metres = lengths * poolLengthM;
+    const seconds = swimByPace ? Math.round((boxes * metres) / 100) : boxes;
+    return seconds >= 1 ? { distanceKm: Math.round((metres / 1000) * 100) / 100, seconds, lengths } : null;
   }
 
   async function removeScore() {
@@ -238,24 +275,49 @@ export default function AddEntryDialog({
         setError(`Enter the pool length in metres (${MIN_POOL_LENGTH_M} to ${MAX_POOL_LENGTH_M}).`);
         return;
       }
-      const lengths = Number(swimLengths);
-      if (swimLengths === '' || !Number.isInteger(lengths) || lengths < 1 || lengths > MAX_LENGTHS_PER_SWIM) {
-        setError(`Enter the lengths swum as a whole number, 1 to ${MAX_LENGTHS_PER_SWIM}.`);
+      const what = swimByPace ? 'pace' : 'time';
+      const parsed = [];
+      for (let i = 0; i < swims.length; i++) {
+        const w = swims[i];
+        const fail = (text) => setError(swims.length > 1 ? `Set ${i + 1}: ${text}` : text[0].toUpperCase() + text.slice(1));
+        const lengths = Number(w.lengths);
+        if (w.lengths === '' || !Number.isInteger(lengths) || lengths < 1 || lengths > MAX_LENGTHS_PER_SWIM) {
+          fail(`enter the lengths swum as a whole number, 1 to ${MAX_LENGTHS_PER_SWIM}.`);
+          return;
+        }
+        if (boxSeconds(w.min, w.sec) === null) {
+          fail(`enter the ${what} as whole minutes and 0 to 59 seconds.`);
+          return;
+        }
+        const values = swimValues(w);
+        if (!values) {
+          fail(swimByPace ? 'enter the pace per 100 m.' : 'enter the time it took.');
+          return;
+        }
+        parsed.push(values);
+      }
+      // Optional details: blank is fine; anything typed must be in range.
+      const { stroke, avgHr, maxHr, swolf } = swimDetails;
+      const optional = (text, min, max, label) => {
+        if (text === '') return null;
+        const n = Number(text);
+        if (!Number.isInteger(n) || n < min || n > max) throw new Error(`${label} must be a whole number from ${min} to ${max}.`);
+        return n;
+      };
+      let swim;
+      try {
+        swim = {
+          stroke: stroke || null,
+          avgHr: optional(avgHr, MIN_HEART_RATE, MAX_HEART_RATE, 'Average heart rate'),
+          maxHr: optional(maxHr, MIN_HEART_RATE, MAX_HEART_RATE, 'Max heart rate'),
+          swolf: optional(swolf, MIN_SWOLF, MAX_SWOLF, 'SWOLF'),
+        };
+        if (swim.avgHr !== null && swim.maxHr !== null && swim.maxHr < swim.avgHr) throw new Error('Max heart rate cannot be below the average.');
+      } catch (err) {
+        setError(err.message);
         return;
       }
-      const minutesPart = swimMin === '' ? 0 : Number(swimMin);
-      const secondsPart = swimSec === '' ? 0 : Number(swimSec);
-      if (!Number.isInteger(minutesPart) || minutesPart < 0 || !Number.isInteger(secondsPart) || secondsPart < 0 || secondsPart > 59) {
-        setError('Enter the time as whole minutes and 0 to 59 seconds.');
-        return;
-      }
-      const seconds = minutesPart * 60 + secondsPart;
-      if (seconds < 1) {
-        setError('Enter the time it took.');
-        return;
-      }
-      const distanceKm = Math.round(((lengths * poolLengthM) / 1000) * 100) / 100;
-      payload = { personId: person.id, exercise: exercise.id, date, runType: 'easy', runs: [{ distanceKm, seconds, lengths }] };
+      payload = { personId: person.id, exercise: exercise.id, date, runType: 'easy', runs: parsed, swim };
     } else if (isRunning) {
       const parsed = [];
       const what = byPace ? 'pace' : 'time';
@@ -335,7 +397,7 @@ export default function AddEntryDialog({
 
   let submitLabel;
   if (isCardio) submitLabel = 'Save cardio';
-  else if (isSwimming) submitLabel = 'Save swim';
+  else if (isSwimming) submitLabel = swims.length === 1 ? 'Save swim' : `Save ${swims.length} sets`;
   else if (isScore) submitLabel = 'Save VO2 max';
   else if (isRunning) submitLabel = isMulti ? `Save ${runs.length} ${rowLabel.toLowerCase()}${runs.length === 1 ? '' : 's'}` : 'Save run';
   else submitLabel = `Save ${sets.length} ${sets.length === 1 ? 'set' : 'sets'}`;
@@ -575,49 +637,142 @@ export default function AddEntryDialog({
                 onChange={(e) => setPoolLength(e.target.value)}
               />
             </label>
-            <div className="run-row">
-              <span className="set-label">Swim</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                min="1"
-                max={MAX_LENGTHS_PER_SWIM}
-                step="1"
-                placeholder="lengths"
-                aria-label="Lengths swum"
-                value={swimLengths}
-                onChange={(e) => setSwimLengths(e.target.value)}
-              />
-              <input
-                type="number"
-                inputMode="numeric"
-                min="0"
-                step="1"
-                placeholder="min"
-                aria-label="Swim time, minutes"
-                value={swimMin}
-                onChange={(e) => setSwimMin(e.target.value)}
-              />
-              <span className="times" aria-hidden="true">
-                :
-              </span>
-              <input
-                type="number"
-                inputMode="numeric"
-                min="0"
-                max="59"
-                step="1"
-                placeholder="sec"
-                aria-label="Swim time, seconds"
-                value={swimSec}
-                onChange={(e) => setSwimSec(e.target.value)}
-              />
+            <div className="segmented run-entry" role="group" aria-label="Enter each set as">
+              <button type="button" aria-pressed={!swimByPace} onClick={() => setSwimByPace(false)}>
+                Time
+              </button>
+              <button type="button" aria-pressed={swimByPace} onClick={() => setSwimByPace(true)}>
+                Pace /100m
+              </button>
             </div>
+            {swims.map((w, i) => {
+              const name = swims.length > 1 ? `Set ${i + 1}` : 'Swim';
+              const values = swimValues(w);
+              let worked = null;
+              if (values) {
+                worked = swimByPace
+                  ? `${values.distanceKm} km in ${formatDuration(values.seconds)}`
+                  : `${values.distanceKm} km, ${formatSwimPace(swimPace(values.seconds, values.distanceKm))}`;
+              }
+              return (
+                <div className="run-row" key={i}>
+                  <span className="set-label">
+                    {name}
+                    {worked && <small className="last-hint">{worked}</small>}
+                  </span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    max={MAX_LENGTHS_PER_SWIM}
+                    step="1"
+                    placeholder="lengths"
+                    aria-label={`${name} lengths swum`}
+                    value={w.lengths}
+                    onChange={(e) => updateSwim(i, { lengths: e.target.value })}
+                  />
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min="0"
+                    step="1"
+                    placeholder="min"
+                    aria-label={`${name} ${swimByPace ? 'pace per 100 m' : 'time'}, minutes`}
+                    value={w.min}
+                    onChange={(e) => updateSwim(i, { min: e.target.value })}
+                  />
+                  <span className="times" aria-hidden="true">
+                    :
+                  </span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min="0"
+                    max="59"
+                    step="1"
+                    placeholder="sec"
+                    aria-label={`${name} ${swimByPace ? 'pace per 100 m' : 'time'}, seconds`}
+                    value={w.sec}
+                    onChange={(e) => updateSwim(i, { sec: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={`Remove ${name.toLowerCase()}`}
+                    disabled={swims.length === 1}
+                    onClick={() => setSwims((prev) => prev.filter((_, j) => j !== i))}
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+            <button
+              type="button"
+              className="text-btn"
+              disabled={swims.length >= MAX_SETS_PER_ENTRY}
+              onClick={() => setSwims((prev) => [...prev, { ...prev[prev.length - 1] }])}
+            >
+              Add another set
+            </button>
             <p className="hint">
-              Charted by distance per day, with a toggle for pace.
-              {Number(swimLengths) > 0 && Number(poolLength) > 0 &&
-                ` ${swimLengths} × ${poolLength}m ≈ ${((Number(swimLengths) * Number(poolLength)) / 1000).toLocaleString('en-GB', { maximumFractionDigits: 2 })} km.`}
+              One set for a steady swim; for intervals, one set per rep, leaving the rests out. Charted by distance per day, with
+              toggles for pace, heart rate and SWOLF.
             </p>
+
+            <div className="swim-details">
+              <span className="swim-details-title">From your watch (optional, for the whole swim)</span>
+              <label className="field">
+                Stroke
+                <select value={swimDetails.stroke} onChange={(e) => setSwimDetails((d) => ({ ...d, stroke: e.target.value }))}>
+                  <option value="">Not recorded</option>
+                  {SWIM_STROKES.map((k) => (
+                    <option key={k} value={k}>
+                      {SWIM_STROKE_LABELS[k]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                Avg HR (bpm)
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={MIN_HEART_RATE}
+                  max={MAX_HEART_RATE}
+                  step="1"
+                  placeholder="140"
+                  value={swimDetails.avgHr}
+                  onChange={(e) => setSwimDetails((d) => ({ ...d, avgHr: e.target.value }))}
+                />
+              </label>
+              <label className="field">
+                Max HR (bpm)
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={MIN_HEART_RATE}
+                  max={MAX_HEART_RATE}
+                  step="1"
+                  placeholder="165"
+                  value={swimDetails.maxHr}
+                  onChange={(e) => setSwimDetails((d) => ({ ...d, maxHr: e.target.value }))}
+                />
+              </label>
+              <label className="field">
+                SWOLF
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={MIN_SWOLF}
+                  max={MAX_SWOLF}
+                  step="1"
+                  placeholder="38"
+                  value={swimDetails.swolf}
+                  onChange={(e) => setSwimDetails((d) => ({ ...d, swolf: e.target.value }))}
+                />
+              </label>
+            </div>
           </fieldset>
         )}
 
@@ -727,7 +882,7 @@ export default function AddEntryDialog({
                     {isCardio
                       ? cardioText(row.duration_min, row.speed_kmh, row.incline_pct)
                       : isSwimming
-                        ? swimText({ distanceKm: row.distance_km, seconds: row.duration_sec, lengths: row.lengths })
+                        ? swimText(swimOf(row))
                         : isRunning
                           ? `${RUN_TYPE_LABELS[row.run_type]}: ${runText({ distanceKm: row.distance_km, seconds: row.duration_sec })}`
                           : row.weight === null

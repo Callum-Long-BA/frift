@@ -85,12 +85,23 @@ export const MIN_POOL_LENGTH_M = 5;
 export const MAX_POOL_LENGTH_M = 200;
 export const MAX_LENGTHS_PER_SWIM = 1000;
 
-// What the Swimming tile can chart: every swim counts, so it's just a distance/pace toggle
-// rather than Running's easy/tempo/intervals types.
+// What the Swimming tile can chart. Every swim counts (there are no run types), so it is a
+// toggle between the day's distance, pace, average heart rate and SWOLF.
 export const SWIM_VIEWS = [
   { key: 'distance', label: 'Distance', subtitle: 'Distance per day, km' },
   { key: 'pace', label: 'Pace', subtitle: 'Average pace per day, per 100m. Faster is higher' },
+  { key: 'hr', label: 'Avg HR', subtitle: 'Average heart rate per day, bpm' },
+  { key: 'swolf', label: 'SWOLF', subtitle: 'SWOLF per day (seconds + strokes per length). Lower is better, so better is higher' },
 ];
+
+// Optional details a swim can record, from a watch. They are entered once per save and kept
+// on every set saved with them.
+export const SWIM_STROKES = ['freestyle', 'breaststroke', 'backstroke', 'butterfly', 'mixed'];
+export const SWIM_STROKE_LABELS = { freestyle: 'Freestyle', breaststroke: 'Breaststroke', backstroke: 'Backstroke', butterfly: 'Butterfly', mixed: 'Mixed' };
+export const MIN_HEART_RATE = 30;
+export const MAX_HEART_RATE = 250;
+export const MIN_SWOLF = 10;
+export const MAX_SWOLF = 200;
 
 // Handed out in order as people join. The `light` value is what gets stored against a
 // person in the database; `dark` is the lighter twin actually shown, since the app is dark

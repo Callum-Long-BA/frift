@@ -325,3 +325,15 @@ begin
     end if;
   end loop;
 end $$;
+
+-- Optional swim details from a watch: stroke, average and max heart rate (bpm) and SWOLF.
+-- Entered once per save and stored on each set saved with them. Only swims have them.
+alter table entries add column if not exists stroke text
+  check (stroke in ('freestyle', 'breaststroke', 'backstroke', 'butterfly', 'mixed'));
+alter table entries add column if not exists avg_hr int check (avg_hr between 30 and 250);
+alter table entries add column if not exists max_hr int check (max_hr between 30 and 250);
+alter table entries add column if not exists swolf int check (swolf between 10 and 200);
+alter table entries drop constraint if exists entries_swim_details;
+alter table entries add constraint entries_swim_details check (
+  exercise = 'swimming' or (stroke is null and avg_hr is null and max_hr is null and swolf is null)
+);

@@ -255,15 +255,27 @@ test('swimming: always stored as easy, carries the lengths it was converted from
     date: '2026-09-19',
     runType: 'easy',
     runs: [{ distanceKm: 0.5, seconds: 600, lengths: 20 }],
+    swim: { stroke: null, avgHr: null, maxHr: null, swolf: null },
   });
   // A runType in the body is ignored for swimming; it is always 'easy'.
   const withType = parseNewEntry({ ...swim, runType: 'tempo', runs: [{ distanceKm: 0.5, seconds: 600, lengths: 20 }] }, exercises, now);
   assert.equal(withType.runType, 'easy');
 });
 
-test('swimming: rejects more than one swim at a time, and bad lengths', () => {
+test('swimming: several sets at once (intervals), with optional watch details', () => {
+  const set = { distanceKm: 0.1, seconds: 100, lengths: 4 };
+  const e = parseNewEntry({ ...swim, runs: [set, set, set], swim: { stroke: 'freestyle', avgHr: '142', maxHr: 165, swolf: '38' } }, exercises, now);
+  assert.equal(e.runs.length, 3);
+  assert.deepEqual(e.swim, { stroke: 'freestyle', avgHr: 142, maxHr: 165, swolf: 38 });
+  assert.deepEqual(parseNewEntry({ ...swim, runs: [set], swim: { stroke: '', avgHr: '' } }, exercises, now).swim, { stroke: null, avgHr: null, maxHr: null, swolf: null });
+  for (const details of [{ stroke: 'doggy' }, { avgHr: 20 }, { maxHr: 300 }, { avgHr: 150, maxHr: 140 }, { swolf: 5 }, { avgHr: 140.5 }]) {
+    assert.throws(() => parseNewEntry({ ...swim, runs: [set], swim: details }, exercises, now), HttpError);
+  }
+  assert.throws(() => parseNewEntry({ ...swim, runs: Array(11).fill(set) }, exercises, now), /between 1 and 10 sets/);
+});
+
+test('swimming: rejects bad lengths', () => {
   const bad = [
-    { ...swim, runs: [{ distanceKm: 0.5, seconds: 600, lengths: 20 }, { distanceKm: 0.5, seconds: 600, lengths: 20 }] },
     { ...swim, runs: [{ distanceKm: 0.5, seconds: 600, lengths: 0 }] },
     { ...swim, runs: [{ distanceKm: 0.5, seconds: 600, lengths: 1.5 }] },
     { ...swim, runs: [{ distanceKm: 0.5, seconds: 600, lengths: 1001 }] },

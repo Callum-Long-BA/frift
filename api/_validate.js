@@ -1,19 +1,24 @@
 import {
   EQUIPMENT_LABELS,
   MAX_EXERCISE_NAME,
+  MAX_HEART_RATE,
   MAX_LENGTHS_PER_SWIM,
   MAX_POOL_LENGTH_M,
-  MAX_VO2MAX,
-  MIN_VO2MAX,
-  MULTI_RUN_TYPES,
-  RUN_ROW_LABELS,
   MAX_RUN_KM,
   MAX_RUN_SECONDS,
   MAX_SETS_PER_ENTRY,
+  MAX_SWOLF,
+  MAX_VO2MAX,
   MAX_WEIGHT,
+  MIN_HEART_RATE,
   MIN_POOL_LENGTH_M,
+  MIN_SWOLF,
+  MIN_VO2MAX,
   MIN_WEIGHT,
+  MULTI_RUN_TYPES,
+  RUN_ROW_LABELS,
   RUN_TYPES,
+  SWIM_STROKES,
   equipmentOptions,
 } from '../src/lib/constants.js';
 import { tidyExerciseName } from '../src/lib/names.js';
@@ -84,6 +89,9 @@ export function parseDate(value, now = new Date()) {
 //   { kind: 'cardio',   personId, exercise, date, durationMin, speedKmh, inclinePct }
 //   { kind: 'running',  personId, exercise, date, runType, runs: [{ distanceKm, seconds }] }
 //     (one run for easy and tempo; one per rep for intervals, VO2 max sessions and hills)
+//   Swimming is the same shape, always 'easy', with lengths on each set (up to
+//   MAX_SETS_PER_ENTRY sets, e.g. intervals with the rests left out) and
+//   swim: { stroke, avgHr, maxHr, swolf }, each optional (null).
 // Weights keep up to 2 decimal places (1.25 kg).
 export function parseNewEntry(body, exercises, now = new Date()) {
   const personId = parseId(body?.personId, 'Person');
@@ -114,17 +122,14 @@ export function parseNewEntry(body, exercises, now = new Date()) {
     const isSwimming = exercise.id === 'swimming';
     const runType = isSwimming ? 'easy' : body?.runType;
     if (!RUN_TYPES.includes(runType)) throw new HttpError(400, 'Choose a run type.');
-    const multi = !isSwimming && MULTI_RUN_TYPES.includes(runType);
+    const multi = isSwimming || MULTI_RUN_TYPES.includes(runType);
     const rawRuns = body?.runs;
     const most = multi ? MAX_SETS_PER_ENTRY : 1;
     if (!Array.isArray(rawRuns) || rawRuns.length < 1 || rawRuns.length > most) {
-      throw new HttpError(
-        400,
-        multi ? `Log between 1 and ${most} reps at a time.` : isSwimming ? 'Log one swim at a time.' : 'Log one run at a time.',
-      );
+      throw new HttpError(400, multi ? `Log between 1 and ${most} ${isSwimming ? 'sets' : 'reps'} at a time.` : 'Log one run at a time.');
     }
     const runs = rawRuns.map((r, i) => {
-      const label = multi ? `${RUN_ROW_LABELS[runType]} ${i + 1}: ` : '';
+      const label = multi && rawRuns.length > 1 ? `${isSwimming ? 'Set' : RUN_ROW_LABELS[runType]} ${i + 1}: ` : '';
       const distanceKm = toNumber(r?.distanceKm);
       const seconds = toNumber(r?.seconds);
       if (!Number.isFinite(distanceKm) || distanceKm <= 0 || distanceKm > MAX_RUN_KM) {
@@ -137,12 +142,13 @@ export function parseNewEntry(body, exercises, now = new Date()) {
       if (isSwimming) {
         lengths = toNumber(r?.lengths);
         if (!Number.isInteger(lengths) || lengths < 1 || lengths > MAX_LENGTHS_PER_SWIM) {
-          throw new HttpError(400, `Lengths must be a whole number from 1 to ${MAX_LENGTHS_PER_SWIM}.`);
+          throw new HttpError(400, `${label}lengths must be a whole number from 1 to ${MAX_LENGTHS_PER_SWIM}.`);
         }
       }
       return { distanceKm: Math.round(distanceKm * 100) / 100, seconds, lengths };
     });
-    return { kind: 'running', personId, exercise: exercise.id, date, runType, runs };
+    if (!isSwimming) return { kind: 'running', personId, exercise: exercise.id, date, runType, runs };
+    return { kind: 'running', personId, exercise: exercise.id, date, runType, runs, swim: parseSwimDetails(body?.swim) };
   }
 
   const rawSets = body?.sets;
@@ -183,6 +189,24 @@ export function parseNewEntry(body, exercises, now = new Date()) {
   }
 
   return { kind: repsOnly ? 'reps' : 'strength', personId, exercise: exercise.id, date, equipment, sets };
+}
+
+// The optional details of a swim: { stroke, avgHr, maxHr, swolf }, each null if not given.
+// Heart rates are whole bpm, and the max cannot be below the average.
+export function parseSwimDetails(raw) {
+  const optionalInt = (value, min, max, label) => {
+    if (value === undefined || value === null || value === '') return null;
+    const n = toNumber(value);
+    if (!Number.isInteger(n) || n < min || n > max) throw new HttpError(400, `${label} must be a whole number from ${min} to ${max}.`);
+    return n;
+  };
+  const stroke = raw?.stroke === undefined || raw?.stroke === null || raw?.stroke === '' ? null : raw.stroke;
+  if (stroke !== null && !SWIM_STROKES.includes(stroke)) throw new HttpError(400, 'Choose a stroke.');
+  const avgHr = optionalInt(raw?.avgHr, MIN_HEART_RATE, MAX_HEART_RATE, 'Average heart rate');
+  const maxHr = optionalInt(raw?.maxHr, MIN_HEART_RATE, MAX_HEART_RATE, 'Max heart rate');
+  if (avgHr !== null && maxHr !== null && maxHr < avgHr) throw new HttpError(400, 'Max heart rate cannot be below the average.');
+  const swolf = optionalInt(raw?.swolf, MIN_SWOLF, MAX_SWOLF, 'SWOLF');
+  return { stroke, avgHr, maxHr, swolf };
 }
 
 // A person's pool length, in metres, for turning swum lengths into a distance.
